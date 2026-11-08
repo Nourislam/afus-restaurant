@@ -1,12 +1,13 @@
 import type { SetupStatus, UserSession } from '@shared/types'
 import { dbGet, dbWrite } from '../db/client'
-import { hashPassword, PASSWORD_MIN_LENGTH } from '../security/password'
+import { hashPin, isValidPin, PIN_LENGTH } from '../security/password'
 import { setSession } from '../security/session'
 import { AppError } from '../utils/errors'
 import { nowStamp } from '../utils/dates'
 import { seedStarterCatalog } from '../db/seed'
 import { getSettings } from './settings'
 import { toSession } from './auth'
+import { uniqueUsername } from './users'
 
 export interface CompleteSetupInput {
   restaurantName: string
@@ -16,9 +17,9 @@ export interface CompleteSetupInput {
   language: 'ar' | 'fr'
   taxEnabled: boolean
   taxRateBp: number
+  /** The owner account: name + a 4-digit PIN (Afus profile + PIN sign-in). */
   ownerFullName: string
-  ownerUsername: string
-  ownerPassword: string
+  ownerPin: string
 }
 
 export function setupStatus(): SetupStatus {
@@ -31,19 +32,18 @@ export function completeSetup(input: CompleteSetupInput): UserSession {
 
   const restaurantName = input.restaurantName.trim()
   const fullName = input.ownerFullName.trim()
-  const username = input.ownerUsername.trim()
   if (!restaurantName) throw new AppError('VALIDATION', 'restaurantName is required')
-  if (!fullName || !username) throw new AppError('VALIDATION', 'owner name and username are required')
-  if (input.ownerPassword.length < PASSWORD_MIN_LENGTH) throw new AppError('WEAK_PASSWORD')
+  if (!fullName) throw new AppError('VALIDATION', 'owner name is required')
+  if (!isValidPin(input.ownerPin)) throw new AppError('VALIDATION', `PIN must be ${PIN_LENGTH} digits`)
   if (input.taxRateBp < 0 || input.taxRateBp > 10000) throw new AppError('VALIDATION', 'Invalid tax rate')
-  if (dbGet<{ id: number }>('SELECT id FROM users WHERE username = ? COLLATE NOCASE', [username])) {
-    throw new AppError('CONFLICT', 'Username already exists')
-  }
 
   const stamp = nowStamp()
+  const username = uniqueUsername(fullName)
   const created = dbWrite(
-    'INSERT INTO users (username, fullName, roleId, passwordHash, isActive, createdAt) VALUES (?, ?, ?, ?, 1, ?)',
-    [username, fullName, 'owner', hashPassword(input.ownerPassword), stamp]
+    /* passwordHash is the legacy NOT NULL column; staff sign in by PIN now, so it
+       stays empty and is never used. */
+    'INSERT INTO users (username, fullName, roleId, passwordHash, pinHash, isActive, createdAt) VALUES (?, ?, ?, ?, ?, 1, ?)',
+    [username, fullName, 'owner', '', hashPin(input.ownerPin), stamp]
   )
 
   const settings: Record<string, unknown> = {
@@ -53,6 +53,8 @@ export function completeSetup(input: CompleteSetupInput): UserSession {
     address: input.address ?? '',
     currency: input.currency,
     language: input.language,
+    /* New restaurants start in the simple view for floor staff (Afus parity). */
+    uiMode: 'simple',
     taxEnabled: input.taxEnabled,
     taxRateBp: input.taxEnabled ? input.taxRateBp : 0
   }
@@ -76,13 +78,13 @@ export function completeSetup(input: CompleteSetupInput): UserSession {
     username: string
     fullName: string
     roleId: string
-    passwordHash: string
+    pinHash: string | null
     isActive: number
     labelAr: string
     labelFr: string
     permissions: string
   }>(
-    `SELECT u.id, u.username, u.fullName, u.roleId, u.passwordHash, u.isActive, r.labelAr, r.labelFr, r.permissions
+    `SELECT u.id, u.username, u.fullName, u.roleId, u.pinHash, u.isActive, r.labelAr, r.labelFr, r.permissions
        FROM users u JOIN roles r ON r.id = u.roleId WHERE u.id = ?`,
     [created.lastInsertRowid]
   )

@@ -39,6 +39,14 @@ export interface UserRow {
   createdAt: string
 }
 
+/** Shown on the login screen (pre-auth): just enough to pick a profile. No secrets. */
+export interface LoginProfile {
+  id: number
+  fullName: string
+  roleId: string
+  roleLabel: Localized
+}
+
 export interface RoleRow {
   id: string
   labelAr: string
@@ -55,6 +63,8 @@ export interface AppSettings {
   currency: string
   language: Lang
   theme: 'light' | 'dark'
+  /** 'simple' trims the sidebar to the essentials for floor staff; 'full' shows everything (managers). */
+  uiMode: 'simple' | 'full'
   taxEnabled: boolean
   taxRateBp: number
   taxInclusive: boolean

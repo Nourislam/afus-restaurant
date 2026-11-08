@@ -23,6 +23,7 @@ import type {
   Recipe,
   Reservation,
   RestaurantTable,
+  LoginProfile,
   RoleRow,
   Supplier,
   SupplierPayment,
@@ -110,14 +111,14 @@ export const api = {
     taxEnabled: boolean
     taxRateBp: number
     ownerFullName: string
-    ownerUsername: string
-    ownerPassword: string
+    ownerPin: string
   }) => call<UserSession>('setup.complete', input),
 
-  login: (input: { username: string; password: string }) => call<UserSession>('auth.login', input),
+  listForLogin: () => call<LoginProfile[]>('employees.listForLogin'),
+  verifyPin: (input: { id: number; pin: string }) => call<UserSession>('auth.verifyPin', input),
   logout: () => call<{ ok: boolean }>('auth.logout'),
   me: () => call<UserSession | null>('auth.me'),
-  changePassword: (input: { currentPassword: string; newPassword: string }) => call<{ ok: boolean }>('auth.changePassword', input),
+  changePin: (input: { currentPin: string; newPin: string }) => call<{ ok: boolean }>('auth.changePin', input),
 
   getSettings: () => call<AppSettings>('settings.get'),
   updateSettings: (patch: Partial<AppSettings>) => call<AppSettings>('settings.update', patch),
@@ -267,10 +268,10 @@ export const api = {
   users: {
     list: () => call<UserRow[]>('users.list'),
     roles: () => call<RoleRow[]>('users.roles'),
-    save: (input: { id?: number; username: string; fullName: string; roleId: string; phone?: string | null; password?: string }) =>
+    save: (input: { id?: number; fullName: string; roleId: string; phone?: string | null; pin?: string }) =>
       call<UserRow>('users.save', input),
     setActive: (id: number, active: boolean) => call<{ id: number; isActive: boolean }>('users.setActive', { id, active }),
-    resetPassword: (id: number, password: string) => call<{ ok: boolean }>('users.resetPassword', { id, password })
+    resetPin: (id: number, pin: string) => call<{ ok: boolean }>('users.resetPin', { id, pin })
   },
 
   attendance: {

@@ -36,3 +36,21 @@ export function assertPasswordStrength(password: string): void {
     throw error
   }
 }
+
+/* ---- PIN (Afus parity) --------------------------------------------------
+   Staff sign in with a 4-digit PIN, like Afus Boutique/Hanout. A PIN is hashed
+   with the same scrypt scheme as a password (it is just a short secret). */
+export const PIN_LENGTH = 4
+
+export function isValidPin(pin: unknown): pin is string {
+  return typeof pin === 'string' && new RegExp(`^\\d{${PIN_LENGTH}}$`).test(pin)
+}
+
+export function hashPin(pin: string): string {
+  return hashPassword(pin)
+}
+
+export function verifyPin(pin: string, stored: string | null | undefined): boolean {
+  if (!stored) return false
+  return verifyPassword(pin, stored)
+}

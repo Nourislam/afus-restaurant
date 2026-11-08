@@ -2,11 +2,30 @@ import type { RoleRow, UserRow } from '@shared/types'
 import type { Permission } from '@shared/permissions'
 import { ROLE_DEFINITIONS } from '@shared/permissions'
 import { dbAll, dbGet, dbWrite } from '../db/client'
-import { hashPassword, PASSWORD_MIN_LENGTH } from '../security/password'
+import { hashPin, isValidPin, PIN_LENGTH } from '../security/password'
 import { AppError } from '../utils/errors'
 import { nowStamp } from '../utils/dates'
 import { writeAudit } from './audit'
 import { parsePermissions } from './auth'
+
+/** Usernames are internal-only now (staff sign in by profile + PIN). Derive a
+    stable, unique slug from the name, falling back to `user` for non-Latin names. */
+export function uniqueUsername(fullName: string): string {
+  const base =
+    fullName
+      .normalize('NFKD')
+      .replace(/[^\p{L}\p{N}]+/gu, '-')
+      .replace(/^-+|-+$/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '')
+      .slice(0, 24) || 'user'
+  let candidate = base
+  let n = 1
+  while (dbGet<{ id: number }>('SELECT id FROM users WHERE username = ? COLLATE NOCASE', [candidate])) {
+    candidate = `${base}-${n++}`
+  }
+  return candidate
+}
 
 export interface Page<T> {
   items: T[]
@@ -34,33 +53,28 @@ export function listRoles(): RoleRow[] {
 
 export interface SaveUserInput {
   id?: number
-  username: string
   fullName: string
   roleId: string
   phone?: string | null
-  password?: string
+  /** 4-digit PIN. Required when creating; optional when editing (to change it). */
+  pin?: string
 }
 
 export function saveUser(input: SaveUserInput): UserRow {
   if (!ROLE_DEFINITIONS.some((role) => role.id === input.roleId)) throw new AppError('VALIDATION', 'Unknown role')
-  const username = input.username.trim()
   const fullName = input.fullName.trim()
-  if (!username || !fullName) throw new AppError('VALIDATION', 'username and fullName are required')
-
-  const clash = dbGet<{ id: number }>('SELECT id FROM users WHERE username = ? COLLATE NOCASE', [username])
-  if (clash && clash.id !== input.id) throw new AppError('CONFLICT', 'Username already exists')
+  if (!fullName) throw new AppError('VALIDATION', 'fullName is required')
 
   if (input.id) {
     const existing = dbGet<{ id: number }>('SELECT id FROM users WHERE id = ?', [input.id])
     if (!existing) throw new AppError('NOT_FOUND')
-    dbWrite('UPDATE users SET username = ?, fullName = ?, roleId = ?, phone = ? WHERE id = ?', [
-      username,
+    dbWrite('UPDATE users SET fullName = ?, roleId = ?, phone = ? WHERE id = ?', [
       fullName,
       input.roleId,
       input.phone ?? null,
       input.id
     ])
-    if (input.password) setPassword(input.id, input.password)
+    if (input.pin) setPin(input.id, input.pin)
     writeAudit('users.update', 'user', input.id, { roleId: input.roleId })
     return dbGet<UserRow>(
       'SELECT id, username, fullName, roleId, phone, isActive, lastLoginAt, createdAt FROM users WHERE id = ?',
@@ -68,10 +82,11 @@ export function saveUser(input: SaveUserInput): UserRow {
     ) as UserRow
   }
 
-  if (!input.password || input.password.length < PASSWORD_MIN_LENGTH) throw new AppError('WEAK_PASSWORD')
+  if (!isValidPin(input.pin)) throw new AppError('VALIDATION', `PIN must be ${PIN_LENGTH} digits`)
   const result = dbWrite(
-    'INSERT INTO users (username, fullName, roleId, phone, passwordHash, isActive, createdAt) VALUES (?, ?, ?, ?, ?, 1, ?)',
-    [username, fullName, input.roleId, input.phone ?? null, hashPassword(input.password), nowStamp()]
+    /* passwordHash is the legacy NOT NULL column; kept empty (PIN sign-in only). */
+    'INSERT INTO users (username, fullName, roleId, phone, passwordHash, pinHash, isActive, createdAt) VALUES (?, ?, ?, ?, ?, ?, 1, ?)',
+    [uniqueUsername(fullName), fullName, input.roleId, input.phone ?? null, '', hashPin(input.pin), nowStamp()]
   )
   writeAudit('users.create', 'user', result.lastInsertRowid, { roleId: input.roleId })
   return dbGet<UserRow>(
@@ -80,12 +95,12 @@ export function saveUser(input: SaveUserInput): UserRow {
   ) as UserRow
 }
 
-export function setPassword(userId: number, password: string): { ok: true } {
-  if (password.length < PASSWORD_MIN_LENGTH) throw new AppError('WEAK_PASSWORD')
+export function setPin(userId: number, pin: string): { ok: true } {
+  if (!isValidPin(pin)) throw new AppError('VALIDATION', `PIN must be ${PIN_LENGTH} digits`)
   const user = dbGet<{ id: number }>('SELECT id FROM users WHERE id = ?', [userId])
   if (!user) throw new AppError('NOT_FOUND')
-  dbWrite('UPDATE users SET passwordHash = ? WHERE id = ?', [hashPassword(password), userId])
-  writeAudit('users.resetPassword', 'user', userId)
+  dbWrite('UPDATE users SET pinHash = ? WHERE id = ?', [hashPin(pin), userId])
+  writeAudit('users.resetPin', 'user', userId)
   return { ok: true }
 }
 

@@ -22,8 +22,8 @@ beforeEach(async () => {
 const signInAsOwner = (): number => {
   const role = listRoles().find((entry) => entry.id === 'owner')
   if (!role) throw new Error('owner role missing')
-  const user = saveUser({ username: 'tester', fullName: 'Tester', roleId: 'owner', password: 'Tester-2026' })
-  setSession({ userId: user.id, username: 'tester', issuedAt: Date.now() })
+  const user = saveUser({ fullName: 'Tester', roleId: 'owner', pin: '1234' })
+  setSession({ userId: user.id, username: user.username, issuedAt: Date.now() })
   return user.id
 }
 
@@ -67,10 +67,9 @@ describe('request pipeline', () => {
     logout()
     const staffRole = listRoles().find((entry) => entry.id !== 'owner')
     const staff = saveUser({
-      username: 'waiter1',
       fullName: 'Waiter',
       roleId: staffRole?.id ?? 'owner',
-      password: 'Waiter-2026'
+      pin: '5678'
     })
     setSession({ userId: staff.id, username: staff.username, issuedAt: Date.now() })
     register('settings.update', { permission: 'settings.manage', handler: updateSettings as never })

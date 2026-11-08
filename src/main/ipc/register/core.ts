@@ -1,12 +1,12 @@
 import { z } from 'zod'
 import { app } from 'electron'
 import { databaseFile } from '../../db/client'
-import { changePassword, login, logout, me } from '../../services/auth'
+import { changePin, listForLogin, loginWithPin, logout, me } from '../../services/auth'
 import { listAudit } from '../../services/audit'
 import { dashboardSummary } from '../../services/dashboard'
 import { getSettings, settingsPatch, updateSettings } from '../../services/settings'
 import { completeSetup, setupStatus } from '../../services/setup'
-import { listRoles, listUsers, saveUser, setPassword, setUserActive } from '../../services/users'
+import { listRoles, listUsers, saveUser, setPin, setUserActive } from '../../services/users'
 import { registerMany } from '../registry'
 
 export const coreChannels = () =>
@@ -37,27 +37,30 @@ export const coreChannels = () =>
           taxEnabled: z.boolean(),
           taxRateBp: z.number().int().min(0).max(10000),
           ownerFullName: z.string().min(1).max(120),
-          ownerUsername: z.string().min(3).max(48),
-          ownerPassword: z.string().min(6).max(200)
+          ownerPin: z.string().regex(/^\d{4}$/)
         }),
         handler: (input: Parameters<typeof completeSetup>[0]) => completeSetup(input)
       }
     },
     {
-      channel: 'auth.login',
+      channel: 'employees.listForLogin',
+      definition: { allowAnonymous: true, handler: () => listForLogin() }
+    },
+    {
+      channel: 'auth.verifyPin',
       definition: {
         allowAnonymous: true,
-        schema: z.object({ username: z.string().min(1).max(64), password: z.string().min(1).max(200) }),
-        handler: (input: { username: string; password: string }) => login(input)
+        schema: z.object({ id: z.number().int().positive(), pin: z.string().regex(/^\d{4}$/) }),
+        handler: (input: { id: number; pin: string }) => loginWithPin(input)
       }
     },
     { channel: 'auth.logout', definition: { allowAnonymous: true, handler: () => logout() } },
     { channel: 'auth.me', definition: { allowAnonymous: true, handler: () => me() } },
     {
-      channel: 'auth.changePassword',
+      channel: 'auth.changePin',
       definition: {
-        schema: z.object({ currentPassword: z.string().min(1).max(200), newPassword: z.string().min(6).max(200) }),
-        handler: (input: { currentPassword: string; newPassword: string }) => changePassword(input)
+        schema: z.object({ currentPin: z.string().regex(/^\d{4}$/), newPin: z.string().regex(/^\d{4}$/) }),
+        handler: (input: { currentPin: string; newPin: string }) => changePin(input)
       }
     },
     { channel: 'settings.get', definition: { handler: () => getSettings() } },
@@ -85,11 +88,10 @@ export const coreChannels = () =>
         permission: 'employees.manage',
         schema: z.object({
           id: z.number().int().positive().optional(),
-          username: z.string().min(3).max(48),
           fullName: z.string().min(1).max(120),
           roleId: z.string().min(1).max(32),
           phone: z.string().max(40).nullish(),
-          password: z.string().min(6).max(200).optional()
+          pin: z.string().regex(/^\d{4}$/).optional()
         }),
         handler: (input: Parameters<typeof saveUser>[0]) => saveUser(input)
       }
@@ -103,11 +105,11 @@ export const coreChannels = () =>
       }
     },
     {
-      channel: 'users.resetPassword',
+      channel: 'users.resetPin',
       definition: {
         permission: 'employees.manage',
-        schema: z.object({ id: z.number().int().positive(), password: z.string().min(6).max(200) }),
-        handler: (input: { id: number; password: string }) => setPassword(input.id, input.password)
+        schema: z.object({ id: z.number().int().positive(), pin: z.string().regex(/^\d{4}$/) }),
+        handler: (input: { id: number; pin: string }) => setPin(input.id, input.pin)
       }
     },
     { channel: 'audit.list', definition: { permission: 'audit.view', handler: () => listAudit() } }

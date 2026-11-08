@@ -1,149 +1,146 @@
-import { useState, type FormEvent } from 'react'
-import { Eye, EyeOff, KeyRound, UserCircle } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { clsx } from 'clsx'
+import { ArrowLeft } from 'lucide-react'
+import type { LoginProfile } from '@shared/types'
 import { api } from '../lib/api'
-import { errorText, useT } from '../i18n'
-import { Button, Field, Input } from '../components/ui'
+import { localized, useT } from '../i18n'
+import { AfusMark } from '../components/AfusLogo'
+import { TitleBar } from '../components/TitleBar'
+import { PinPad } from '../components/NumPad'
+import { Spinner } from '../components/ui'
 
 export default function LoginPage({ onLogin }: { onLogin: () => Promise<void> }) {
   const { t, language, setLanguage } = useT()
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [profiles, setProfiles] = useState<LoginProfile[]>([])
+  const [restaurantName, setRestaurantName] = useState('')
+  const [selected, setSelected] = useState<LoginProfile | null>(null)
+  const [pin, setPin] = useState('')
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const submit = async (event: FormEvent) => {
-    event.preventDefault()
-    setError(null)
+  useEffect(() => {
+    void (async () => {
+      try {
+        const [list, status] = await Promise.all([api.listForLogin(), api.setupStatus()])
+        setProfiles(list)
+        setRestaurantName(status.restaurantName || t('app.name'))
+      } catch {
+        /* leave empty; the screen still renders */
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const submit = async (entered: string) => {
+    if (!selected || busy) return
     setBusy(true)
+    setError(null)
     try {
-      await api.login({ username: username.trim(), password })
+      await api.verifyPin({ id: selected.id, pin: entered })
       await onLogin()
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'UNKNOWN')
-    } finally {
+    } catch {
+      setError(t('login.invalidPin'))
+      setPin('')
       setBusy(false)
     }
   }
 
+  const poweredBy = (
+    <div className="flex flex-none items-center justify-center gap-2 py-4 text-xs text-ink-500">
+      <AfusMark className="h-4 w-4 rounded" />
+      <span>{t('login.poweredBy', { app: t('app.name') })}</span>
+    </div>
+  )
+
   return (
-    <div className="flex min-h-full bg-slate-50 dark:bg-slate-950">
-      <div className="relative hidden w-[45%] flex-col justify-between overflow-hidden bg-brand-900 p-10 text-white lg:flex">
-        <div className="absolute -end-24 -top-24 h-72 w-72 rounded-full bg-brand-700/40 blur-2xl" />
-        <div className="absolute -bottom-32 -start-16 h-80 w-80 rounded-full bg-brand-800/60 blur-3xl" />
-        <div className="relative">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-sm font-black ring-1 ring-white/20">
-              AF
-            </div>
-            <div>
-              <p className="text-lg font-bold leading-tight">AFUS Restaurant</p>
-              <p className="text-xs text-brand-200">Smart Restaurant Management</p>
-            </div>
-          </div>
-        </div>
-        <div className="relative space-y-5">
-          <h2 className="max-w-sm text-3xl font-bold leading-snug">
-            {language === 'ar' ? 'إدارة مطعمك بالكامل، دون إنترنت.' : 'Gérez tout votre restaurant, sans internet.'}
-          </h2>
-          <ul className="space-y-2.5 text-sm text-brand-100/90">
-            {(language === 'ar'
-              ? ['نقطة بيع سريعة وشاشة مطبخ', 'مخزون ووصفات بتكلفة دقيقة', 'صندوق وتقارير مالية', 'نسخ احتياطي محلي آمن']
-              : ['Caisse rapide et écran cuisine', 'Stock et recettes au coût réel', 'Caisse et rapports financiers', 'Sauvegarde locale sécurisée']
-            ).map((item) => (
-              <li key={item} className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                {item}
-              </li>
-            ))}
-          </ul>
-        </div>
-        <p className="relative text-[11px] text-brand-300/70">
-          {language === 'ar' ? 'بياناتك تبقى على جهازك.' : 'Vos données restent sur votre machine.'}
-        </p>
-      </div>
+    <div className="flex h-full flex-col bg-ink-100 dark:bg-ink-950" dir={language === 'ar' ? 'rtl' : 'ltr'}>
+      <TitleBar bare>
+        <button
+          onClick={() => setLanguage(language === 'ar' ? 'fr' : 'ar')}
+          className="rounded-lg border border-ink-200 px-2.5 py-1 text-xs font-bold text-ink-600 transition hover:bg-ink-50 dark:border-ink-700 dark:text-ink-300 dark:hover:bg-ink-800"
+        >
+          {language === 'ar' ? 'FR' : 'ع'}
+        </button>
+      </TitleBar>
 
-      <div className="flex flex-1 items-center justify-center p-6">
-        <div className="w-full max-w-sm">
-          <div className="mb-6 flex items-center justify-between lg:hidden">
-            <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-900 text-xs font-black text-white">
-                AF
-              </div>
-              <span className="text-sm font-bold">AFUS Restaurant</span>
-            </div>
+      {selected ? (
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto p-6">
+          <div className="w-full max-w-md animate-scale-in">
             <button
-              onClick={() => setLanguage(language === 'ar' ? 'fr' : 'ar')}
-              className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-bold text-slate-500 dark:border-slate-700"
+              onClick={() => {
+                setSelected(null)
+                setPin('')
+                setError(null)
+              }}
+              className="mb-4 flex items-center gap-2 text-sm text-ink-400 transition hover:text-ink-700 dark:hover:text-white"
             >
-              {language === 'ar' ? 'FR' : 'ع'}
+              <ArrowLeft className="h-4 w-4 flip-rtl" /> {t('login.back')}
             </button>
+            <div className="afus-card overflow-hidden">
+              <div className="flex flex-col items-center gap-2 border-b border-ink-100 bg-ink-50/60 p-6 text-center dark:border-ink-800 dark:bg-ink-800/30">
+                <div className="flex h-20 w-20 items-center justify-center rounded-full gradient-primary text-3xl font-bold text-white shadow-lg">
+                  {selected.fullName.charAt(0)}
+                </div>
+                <h2 className="max-w-full truncate text-xl font-bold text-ink-900 dark:text-white">{selected.fullName}</h2>
+                <p className="text-sm text-ink-500">{localized(language, selected.roleLabel)}</p>
+              </div>
+              <div className="p-6">
+                <p className="mb-5 text-center text-sm text-ink-500">{t('login.enterPin')}</p>
+                <PinPad value={pin} onChange={setPin} onEnter={submit} disabled={busy} />
+                <div className="mt-4 h-5 text-center text-sm font-medium text-red-500">
+                  {busy ? <Spinner size="sm" /> : error}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto p-6">
+          <div className="mb-8 text-center">
+            <div className="mx-auto mb-4 w-fit">
+              <AfusMark className="h-20 w-20 rounded-2xl shadow-lg ring-1 ring-black/5" title={restaurantName} />
+            </div>
+            <h1 className="mb-1 break-words text-3xl font-bold text-ink-900 dark:text-white">{restaurantName || t('app.name')}</h1>
+            <p className="text-ink-500">{t('login.selectProfile')}</p>
           </div>
 
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{t('auth.loginTitle')}</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t('auth.loginSubtitle')}</p>
-
-          <form onSubmit={submit} className="mt-6 space-y-4">
-            <Field label={t('auth.username')}>
-              <div className="relative">
-                <UserCircle className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <Input
-                  className="ps-9"
-                  value={username}
-                  onChange={(event) => setUsername(event.target.value)}
-                  autoFocus
-                  autoComplete="username"
-                  required
-                />
-              </div>
-            </Field>
-            <Field label={t('auth.password')}>
-              <div className="relative">
-                <KeyRound className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <Input
-                  className="ps-9 pe-10"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  autoComplete="current-password"
-                  required
-                />
+          {profiles.length === 0 ? (
+            <div className="py-10 text-center">
+              <p className="mb-1 text-ink-500">{t('login.noEmployees')}</p>
+              <p className="text-sm text-ink-400">{t('login.noEmployeesHint')}</p>
+            </div>
+          ) : (
+            <div className="flex max-w-4xl flex-wrap justify-center gap-4">
+              {profiles.map((profile, index) => (
                 <button
-                  type="button"
-                  onClick={() => setShowPassword((value) => !value)}
-                  className="absolute end-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:text-slate-600"
-                  tabIndex={-1}
+                  key={profile.id}
+                  onClick={() => {
+                    setSelected(profile)
+                    setPin('')
+                    setError(null)
+                  }}
+                  style={{ animationDelay: `${Math.min(index * 40, 320)}ms` }}
+                  className="group afus-card w-[11.5rem] animate-table-pop p-6 text-center transition-all duration-200 hover:-translate-y-0.5 hover:border-brand-500 hover:shadow-glow"
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-ink-100 text-2xl font-semibold text-ink-500 transition-colors group-hover:bg-brand-600 group-hover:text-white dark:bg-ink-800">
+                    {profile.fullName.charAt(0)}
+                  </div>
+                  <p className="truncate font-semibold text-ink-800 dark:text-ink-100" title={profile.fullName}>
+                    {profile.fullName}
+                  </p>
+                  <p className="text-xs text-ink-500">{localized(language, profile.roleLabel)}</p>
                 </button>
-              </div>
-            </Field>
-
-            {error ? (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
-                {errorText(language, error)}
-              </div>
-            ) : null}
-
-            <Button type="submit" size="lg" className="w-full" loading={busy}>
-              {t('auth.login')}
-            </Button>
-          </form>
-
-          <div className="mt-6 flex items-center justify-between text-[11px] text-slate-400">
-            <span className="flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              {t('app.offline')}
-            </span>
-            <button
-              onClick={() => setLanguage(language === 'ar' ? 'fr' : 'ar')}
-              className="hidden font-semibold text-slate-500 hover:text-brand-700 lg:block"
-            >
-              {language === 'ar' ? 'Français' : 'العربية'}
-            </button>
-          </div>
+              ))}
+            </div>
+          )}
         </div>
-      </div>
+      )}
+
+      <p className={clsx('flex items-center justify-center gap-1.5 text-[11px] text-ink-400', 'pb-1')}>
+        <span className="h-1.5 w-1.5 rounded-full bg-accent-500" />
+        {t('app.offline')}
+      </p>
+      {poweredBy}
     </div>
   )
 }

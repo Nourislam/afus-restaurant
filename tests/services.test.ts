@@ -3,14 +3,14 @@ import { closeDatabase, dbAll, dbGet, dbWrite, openDatabase } from '../src/main/
 import { nowStamp } from '../src/main/utils/dates'
 import { dashboardSummary } from '../src/main/services/dashboard'
 import { seedCoreData } from '../src/main/db/seed'
-import { changePassword, login, logout, me, permissionsForUser } from '../src/main/services/auth'
-import { listRoles, listUsers, saveUser, setPassword, setUserActive } from '../src/main/services/users'
+import { changePin, listForLogin, loginWithPin, logout, me, permissionsForUser } from '../src/main/services/auth'
+import { listRoles, listUsers, saveUser, setPin, setUserActive } from '../src/main/services/users'
 import { completeSetup, setupStatus } from '../src/main/services/setup'
 import { getSettings, updateSettings } from '../src/main/services/settings'
 import { listAudit } from '../src/main/services/audit'
 import { clearSession } from '../src/main/security/session'
 
-const OWNER = { ownerFullName: 'مالك المطعم', ownerUsername: 'owner', ownerPassword: 'Owner-2026' }
+const OWNER = { ownerFullName: 'مالك المطعم', ownerPin: '1234' }
 
 function seedOwner() {
   return completeSetup({
@@ -21,6 +21,12 @@ function seedOwner() {
     taxRateBp: 1900,
     ...OWNER
   })
+}
+
+function staffRoleId() {
+  const role = listRoles().find((entry) => entry.id !== 'owner')
+  if (!role) throw new Error('expected a non-owner role')
+  return role.id
 }
 
 beforeEach(async () => {
@@ -40,9 +46,9 @@ describe('first-run setup', () => {
     expect(session.roleId).toBe('owner')
     expect(session.permissions.length).toBeGreaterThan(0)
     expect(setupStatus().initialized).toBe(true)
-    expect(getSettings()).toMatchObject({ restaurantName: 'AFUS Restaurant', currency: 'DZD', taxRateBp: 1900 })
+    expect(getSettings()).toMatchObject({ restaurantName: 'AFUS Restaurant', currency: 'DZD', taxRateBp: 1900, uiMode: 'simple' })
     expect(dbGet<{ count: number }>('SELECT COUNT(*) AS count FROM products')?.count).toBe(6)
-    expect(me()?.username).toBe('owner')
+    expect(me()?.fullName).toBe(OWNER.ownerFullName)
   })
 
   it('refuses a second setup run', () => {
@@ -50,7 +56,7 @@ describe('first-run setup', () => {
     expect(() => seedOwner()).toThrowError(expect.objectContaining({ code: 'ALREADY_INITIALIZED' }))
   })
 
-  it('rejects a weak owner password', () => {
+  it('rejects an owner PIN that is not 4 digits', () => {
     expect(() =>
       completeSetup({
         restaurantName: 'X',
@@ -59,60 +65,50 @@ describe('first-run setup', () => {
         taxEnabled: false,
         taxRateBp: 0,
         ownerFullName: 'A',
-        ownerUsername: 'short',
-        ownerPassword: '123'
+        ownerPin: '123'
       })
-    ).toThrowError(expect.objectContaining({ code: 'WEAK_PASSWORD' }))
+    ).toThrowError(expect.objectContaining({ code: 'VALIDATION' }))
   })
 })
 
 describe('authentication', () => {
-  it('logs in with valid credentials and audits the attempt', () => {
-    seedOwner()
+  it('signs in with a profile + PIN and audits the attempt', () => {
+    const owner = seedOwner()
     logout()
-    const session = login({ username: 'owner', password: OWNER.ownerPassword })
+    const session = loginWithPin({ id: owner.id, pin: OWNER.ownerPin })
     expect(session.fullName).toBe(OWNER.ownerFullName)
     expect(listAudit().some((entry) => entry.action === 'auth.login')).toBe(true)
   })
 
-  it('accepts a username typed in another letter case', () => {
+  it('lists login profiles without leaking any secret', () => {
     seedOwner()
-    logout()
-    expect(login({ username: 'OWNER', password: OWNER.ownerPassword }).username).toBe('owner')
-    expect(dbAll<{ count: number }>('SELECT COUNT(*) AS count FROM users WHERE username = ? COLLATE NOCASE', ['OwNeR'])[0]?.count).toBe(1)
+    const profiles = listForLogin()
+    expect(profiles).toHaveLength(1)
+    expect(profiles[0]).toMatchObject({ fullName: OWNER.ownerFullName, roleId: 'owner' })
+    expect(JSON.stringify(profiles)).not.toMatch(/pinHash|passwordHash|scrypt/)
   })
 
-  it('does not reveal whether an unknown account exists', () => {
-    seedOwner()
-    expect(() => login({ username: 'owner', password: 'wrong-password' })).toThrowError(expect.objectContaining({ code: 'INVALID_CREDENTIALS' }))
-    expect(() => login({ username: 'nobody', password: 'wrong-password' })).toThrowError(expect.objectContaining({ code: 'INVALID_CREDENTIALS' }))
+  it('does not reveal whether an account exists (same error for all failures)', () => {
+    const owner = seedOwner()
+    expect(() => loginWithPin({ id: owner.id, pin: '0000' })).toThrowError(expect.objectContaining({ code: 'INVALID_CREDENTIALS' }))
+    expect(() => loginWithPin({ id: 999999, pin: '0000' })).toThrowError(expect.objectContaining({ code: 'INVALID_CREDENTIALS' }))
   })
 
   it('refuses a disabled account', () => {
-    const owner = seedOwner()
-    const staffRole = listRoles().find((role) => role.id !== 'owner')
-    if (!staffRole) throw new Error('expected a non-owner role')
-    const staff = saveUser({
-      username: 'staff',
-      fullName: 'Staff',
-      roleId: staffRole.id,
-      password: 'Staff-2026'
-    })
+    seedOwner()
+    const staff = saveUser({ fullName: 'Staff', roleId: staffRoleId(), pin: '5678' })
     logout()
-    login({ username: 'staff', password: 'Staff-2026' })
+    loginWithPin({ id: staff.id, pin: '5678' })
     setUserActive(staff.id, false)
     expect(me()).toBeNull()
-    expect(() => login({ username: 'staff', password: 'Staff-2026' })).toThrowError(expect.objectContaining({ code: 'ACCOUNT_DISABLED' }))
-    expect(owner.id).toBeGreaterThan(0)
+    expect(() => loginWithPin({ id: staff.id, pin: '5678' })).toThrowError(expect.objectContaining({ code: 'INVALID_CREDENTIALS' }))
   })
 
   it('drops the session and the permissions when the account is disabled mid-session', () => {
     seedOwner()
-    const staffRole = listRoles().find((role) => role.id !== 'owner')
-    if (!staffRole) throw new Error('expected a non-owner role')
-    const staff = saveUser({ username: 'session-staff', fullName: 'Staff', roleId: staffRole.id, password: 'Staff-2026' })
+    const staff = saveUser({ fullName: 'Staff', roleId: staffRoleId(), pin: '5678' })
     logout()
-    login({ username: 'session-staff', password: 'Staff-2026' })
+    loginWithPin({ id: staff.id, pin: '5678' })
     expect(permissionsForUser(staff.id).length).toBeGreaterThan(0)
     setUserActive(staff.id, false)
     expect(permissionsForUser(staff.id)).toEqual([])
@@ -120,27 +116,25 @@ describe('authentication', () => {
   })
 })
 
-describe('password change', () => {
-  it('requires the current password', () => {
+describe('PIN change', () => {
+  it('requires the current PIN', () => {
     seedOwner()
-    expect(() => changePassword({ currentPassword: 'nope', newPassword: 'New-2026' })).toThrowError(
-      /INVALID_CREDENTIALS/
+    expect(() => changePin({ currentPin: '0000', newPin: '4321' })).toThrowError(/INVALID_CREDENTIALS/)
+  })
+
+  it('rejects a new PIN that is not 4 digits', () => {
+    seedOwner()
+    expect(() => changePin({ currentPin: OWNER.ownerPin, newPin: '12' })).toThrowError(
+      expect.objectContaining({ code: 'VALIDATION' })
     )
   })
 
-  it('rejects a short new password', () => {
-    seedOwner()
-    expect(() => changePassword({ currentPassword: OWNER.ownerPassword, newPassword: '1' })).toThrowError(
-      /WEAK_PASSWORD/
-    )
-  })
-
-  it('replaces the stored hash', () => {
-    seedOwner()
-    changePassword({ currentPassword: OWNER.ownerPassword, newPassword: 'New-2026-pass' })
+  it('replaces the stored PIN', () => {
+    const owner = seedOwner()
+    changePin({ currentPin: OWNER.ownerPin, newPin: '4321' })
     logout()
-    expect(() => login({ username: 'owner', password: OWNER.ownerPassword })).toThrowError(expect.objectContaining({ code: 'INVALID_CREDENTIALS' }))
-    expect(login({ username: 'owner', password: 'New-2026-pass' }).username).toBe('owner')
+    expect(() => loginWithPin({ id: owner.id, pin: OWNER.ownerPin })).toThrowError(expect.objectContaining({ code: 'INVALID_CREDENTIALS' }))
+    expect(loginWithPin({ id: owner.id, pin: '4321' }).id).toBe(owner.id)
   })
 })
 
@@ -151,20 +145,24 @@ describe('user administration', () => {
     expect(listRoles().map((role) => role.id)).toEqual(expect.arrayContaining(['owner']))
   })
 
-  it('rejects a duplicate username case-insensitively', () => {
+  it('gives two staff with the same name distinct internal usernames', () => {
     seedOwner()
-    const role = listRoles().find((entry) => entry.id !== 'owner')
-    expect(() =>
-      saveUser({ username: 'OWNER', fullName: 'Clone', roleId: role?.id ?? 'owner', password: 'Clone-2026' })
-    ).toThrowError(expect.objectContaining({ code: 'CONFLICT' }))
+    const a = saveUser({ fullName: 'Ali', roleId: staffRoleId(), pin: '1111' })
+    const b = saveUser({ fullName: 'Ali', roleId: staffRoleId(), pin: '2222' })
+    const ua = dbGet<{ username: string }>('SELECT username FROM users WHERE id = ?', [a.id])?.username
+    const ub = dbGet<{ username: string }>('SELECT username FROM users WHERE id = ?', [b.id])?.username
+    expect(ua).toBeTruthy()
+    expect(ua).not.toBe(ub)
   })
 
-  it('rejects an unknown role and a weak password', () => {
+  it('rejects an unknown role and an invalid PIN', () => {
     seedOwner()
-    expect(() => saveUser({ username: 'x', fullName: 'X', roleId: 'nope', password: 'Strong-1' })).toThrowError(
+    expect(() => saveUser({ fullName: 'X', roleId: 'nope', pin: '1234' })).toThrowError(
       expect.objectContaining({ code: 'VALIDATION' })
     )
-    expect(() => saveUser({ username: 'y', fullName: 'Y', roleId: 'owner', password: '1' })).toThrowError(expect.objectContaining({ code: 'WEAK_PASSWORD' }))
+    expect(() => saveUser({ fullName: 'Y', roleId: 'owner', pin: '1' })).toThrowError(
+      expect.objectContaining({ code: 'VALIDATION' })
+    )
   })
 
   it('never disables the last administrator', () => {
@@ -175,31 +173,23 @@ describe('user administration', () => {
 
   it('allows disabling an administrator once another one exists', () => {
     const owner = seedOwner()
-    const second = saveUser({
-      username: 'second-owner',
-      fullName: 'Second Owner',
-      roleId: 'owner',
-      password: 'Owner-2026b'
-    })
+    const second = saveUser({ fullName: 'Second Owner', roleId: 'owner', pin: '8888' })
     expect(() => setUserActive(owner.id, false)).not.toThrow()
     expect(dbGet<{ isActive: number }>('SELECT isActive FROM users WHERE id = ?', [second.id])?.isActive).toBe(1)
   })
 
-  it('resets a password through the admin path', () => {
+  it('resets a PIN through the admin path', () => {
     const owner = seedOwner()
-    setPassword(owner.id, 'Reset-2026')
+    setPin(owner.id, '4242')
     logout()
-    expect(login({ username: 'owner', password: 'Reset-2026' }).id).toBe(owner.id)
+    expect(loginWithPin({ id: owner.id, pin: '4242' }).id).toBe(owner.id)
   })
 
   it('audits administrative writes', () => {
     seedOwner()
-    const role = listRoles().find((entry) => entry.id !== 'owner')
-    saveUser({ username: 'audited', fullName: 'Audited', roleId: role?.id ?? 'owner', password: 'Audit-2026' })
+    saveUser({ fullName: 'Audited', roleId: staffRoleId(), pin: '3333' })
     const actions = dbAll<{ action: string }>('SELECT action FROM audit_log')
-    expect(actions.map((entry) => entry.action)).toEqual(
-      expect.arrayContaining(['setup.complete', 'users.create'])
-    )
+    expect(actions.map((entry) => entry.action)).toEqual(expect.arrayContaining(['setup.complete', 'users.create']))
   })
 })
 
@@ -236,12 +226,17 @@ describe('settings', () => {
     const settings = getSettings()
     expect(settings.currency).toBe('DZD')
     expect(settings.paperWidth).toBe('80')
+    expect(settings.uiMode).toBe('simple')
   })
 
   it('validates and persists a patch', () => {
     const updated = updateSettings({ restaurantName: 'AFUS 2', taxRateBp: 900, paymentMethods: ['cash'] })
     expect(updated.restaurantName).toBe('AFUS 2')
     expect(getSettings().taxRateBp).toBe(900)
+  })
+
+  it('switches the UI mode', () => {
+    expect(updateSettings({ uiMode: 'full' }).uiMode).toBe('full')
   })
 
   it('rejects an out-of-range tax rate', () => {

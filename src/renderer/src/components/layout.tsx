@@ -46,6 +46,7 @@ export function AppShell() {
   const setLanguage = useAppStore((state) => state.setLanguage)
   const theme = useAppStore((state) => state.theme)
   const setTheme = useAppStore((state) => state.setTheme)
+  const setSettings = useAppStore((state) => state.setSettings)
   const navigate = useNavigate()
   const location = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -54,6 +55,20 @@ export function AppShell() {
   const menuRef = useRef<HTMLDivElement>(null)
 
   const permissions = user?.permissions ?? []
+  const canManage = permissions.includes('settings.manage')
+  /* Simple mode (Afus parity): floor staff see only the operational screens, not
+     the management/settings sections. Managers always see everything. */
+  const simpleMode = settings?.uiMode === 'simple' && !canManage
+
+  const toggleUiMode = async () => {
+    const next = settings?.uiMode === 'simple' ? 'full' : 'simple'
+    try {
+      const updated = await api.updateSettings({ uiMode: next })
+      setSettings(updated)
+    } catch {
+      /* ignore */
+    }
+  }
   const operations: NavItem[] = [
     { to: '/', label: t('nav.dashboard'), icon: LayoutDashboard, permission: 'dashboard.view', exact: true },
     { to: '/tables', label: t('nav.tables'), icon: UtensilsCrossed, permission: ['tables.manage', 'pos.use'] }
@@ -154,8 +169,8 @@ export function AppShell() {
 
         <div className="flex-1 px-2 pb-4">
           {renderSection(t('nav.operations'), operations)}
-          {renderSection(t('nav.management'), management)}
-          {renderSection(t('nav.settings'), system)}
+          {simpleMode ? null : renderSection(t('nav.management'), management)}
+          {simpleMode ? null : renderSection(t('nav.settings'), system)}
         </div>
 
         <div className="border-t border-white/10 px-4 py-3">
@@ -185,6 +200,20 @@ export function AppShell() {
           </div>
 
           <div className="titlebar-no-drag ms-auto flex items-center gap-1.5">
+            {canManage ? (
+              <button
+                onClick={() => void toggleUiMode()}
+                className={clsx(
+                  'rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition',
+                  settings?.uiMode === 'simple'
+                    ? 'border-brand-600/40 bg-brand-600/10 text-brand-700 dark:text-brand-300'
+                    : 'border-ink-200 text-ink-600 hover:bg-ink-50 dark:border-ink-700 dark:text-ink-300 dark:hover:bg-ink-800'
+                )}
+                title={settings?.uiMode === 'simple' ? t('mode.full') : t('mode.simple')}
+              >
+                {settings?.uiMode === 'simple' ? t('mode.simple') : t('mode.full')}
+              </button>
+            ) : null}
             <button
               onClick={() => setLanguage(languageStore === 'ar' ? 'fr' : 'ar')}
               className="rounded-lg border border-ink-200 px-2.5 py-1.5 text-xs font-bold text-ink-600 transition hover:bg-ink-50 dark:border-ink-700 dark:text-ink-300 dark:hover:bg-ink-800"
@@ -226,7 +255,7 @@ export function AppShell() {
                     }}
                   >
                     <SettingsIcon className="h-3.5 w-3.5" />
-                    {t('auth.changePassword')}
+                    {t('auth.changePin')}
                   </button>
                   <button
                     className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-xs text-ink-600 hover:bg-ink-50 dark:text-ink-300 dark:hover:bg-ink-800"
@@ -254,19 +283,20 @@ export function AppShell() {
 }
 
 function ChangePasswordModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { t, language } = useT()
-  const [currentPassword, setCurrentPassword] = useState('')
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
+  const { t } = useT()
+  const [currentPin, setCurrentPin] = useState('')
+  const [newPin, setNewPin] = useState('')
+  const [confirmPin, setConfirmPin] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
+  const onlyPin = (value: string) => value.replace(/\D/g, '').slice(0, 4)
 
   useEffect(() => {
     if (!open) {
-      setCurrentPassword('')
-      setNewPassword('')
-      setConfirmPassword('')
+      setCurrentPin('')
+      setNewPin('')
+      setConfirmPin('')
       setError(null)
       setDone(false)
     }
@@ -274,13 +304,17 @@ function ChangePasswordModal({ open, onClose }: { open: boolean; onClose: () => 
 
   const submit = async () => {
     setError(null)
-    if (newPassword !== confirmPassword) {
-      setError(language === 'ar' ? 'كلمتا المرور غير متطابقتين' : 'Les mots de passe ne correspondent pas')
+    if (!/^\d{4}$/.test(newPin)) {
+      setError(t('setup.pinFormat'))
+      return
+    }
+    if (newPin !== confirmPin) {
+      setError(t('auth.pinMismatch'))
       return
     }
     setBusy(true)
     try {
-      await api.changePassword({ currentPassword, newPassword })
+      await api.changePin({ currentPin, newPin })
       setDone(true)
       setTimeout(onClose, 900)
     } catch (caught) {
@@ -293,7 +327,7 @@ function ChangePasswordModal({ open, onClose }: { open: boolean; onClose: () => 
   return (
     <Modal
       open={open}
-      title={t('auth.changePassword')}
+      title={t('auth.changePin')}
       onClose={onClose}
       size="sm"
       footer={
@@ -308,17 +342,17 @@ function ChangePasswordModal({ open, onClose }: { open: boolean; onClose: () => 
       }
     >
       <div className="space-y-3">
-        <Field label={t('auth.currentPassword')}>
-          <Input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} />
+        <Field label={t('auth.currentPin')}>
+          <Input type="password" inputMode="numeric" className="ltr tracking-[0.5em]" value={currentPin} onChange={(event) => setCurrentPin(onlyPin(event.target.value))} />
         </Field>
-        <Field label={t('auth.newPassword')} hint={t('auth.passwordHint')}>
-          <Input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
+        <Field label={t('auth.newPin')} hint={t('auth.pinHint')}>
+          <Input type="password" inputMode="numeric" className="ltr tracking-[0.5em]" value={newPin} onChange={(event) => setNewPin(onlyPin(event.target.value))} />
         </Field>
-        <Field label={t('common.confirm')}>
-          <Input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} />
+        <Field label={t('auth.confirmPin')}>
+          <Input type="password" inputMode="numeric" className="ltr tracking-[0.5em]" value={confirmPin} onChange={(event) => setConfirmPin(onlyPin(event.target.value))} />
         </Field>
         {error ? <p className="text-xs font-medium text-red-600">{error}</p> : null}
-        {done ? <p className="text-xs font-medium text-accent-700">{t('auth.passwordChanged')}</p> : null}
+        {done ? <p className="text-xs font-medium text-accent-700">{t('auth.pinChanged')}</p> : null}
       </div>
     </Modal>
   )

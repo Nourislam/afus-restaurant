@@ -5,7 +5,7 @@
  * column name, so services hand domain objects straight to the renderer without
  * a mapping layer (and without the drift that comes with one).
  */
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 
 const V1 = `
 CREATE TABLE IF NOT EXISTS roles (
@@ -400,6 +400,15 @@ CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log (createdAt);
 CREATE INDEX IF NOT EXISTS idx_reservations_date ON reservations (date);
 `
 
+/* V2 — Afus parity: staff sign in with a 4-digit PIN (profile + PIN pad) like
+   Afus Boutique/Hanout. The PIN is stored hashed in `pinHash`; `passwordHash`
+   and `username` are kept for backward compatibility but are no longer used to
+   sign in. Non-destructive: only adds a column. */
+const V2 = `
+ALTER TABLE users ADD COLUMN pinHash TEXT;
+`
+
 export const MIGRATIONS: Record<number, string> = {
-  1: V1
+  1: V1,
+  2: V2
 }

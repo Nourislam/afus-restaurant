@@ -10,14 +10,14 @@ import { Badge, Button, Card, DataTable, ErrorBox, Field, Input, Modal, PageHead
 
 interface FormState {
   id?: number
-  username: string
   fullName: string
   roleId: string
   phone: string
-  password: string
+  pin: string
 }
 
-const EMPTY: FormState = { username: '', fullName: '', roleId: 'waiter', phone: '', password: '' }
+const EMPTY: FormState = { fullName: '', roleId: 'waiter', phone: '', pin: '' }
+const onlyPin = (value: string) => value.replace(/\D/g, '').slice(0, 4)
 
 export default function Employees() {
   const { t, language } = useT()
@@ -26,7 +26,7 @@ export default function Employees() {
   const roles = useApi(() => api.users.roles(), [])
   const [form, setForm] = useState<FormState | null>(null)
   const [resetFor, setResetFor] = useState<UserRow | null>(null)
-  const [resetPassword, setResetPassword] = useState('')
+  const [resetPin, setResetPin] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -48,11 +48,10 @@ export default function Employees() {
     try {
       await api.users.save({
         id: form.id,
-        username: form.username.trim(),
         fullName: form.fullName.trim(),
         roleId: form.roleId,
         phone: form.phone.trim() || null,
-        password: form.password ? form.password : undefined
+        pin: form.pin ? form.pin : undefined
       })
       closeForm()
       await users.reload()
@@ -78,9 +77,9 @@ export default function Employees() {
     setBusy(true)
     setError(null)
     try {
-      await api.users.resetPassword(resetFor.id, resetPassword)
+      await api.users.resetPin(resetFor.id, resetPin)
       setResetFor(null)
-      setResetPassword('')
+      setResetPin('')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'INTERNAL')
     } finally {
@@ -112,11 +111,11 @@ export default function Employees() {
               key: 'name',
               header: t('common.name'),
               render: (row) => (
-                <div>
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-ink-100 text-sm font-semibold text-ink-500 dark:bg-ink-800">
+                    {row.fullName.charAt(0)}
+                  </span>
                   <p className="font-semibold text-ink-800 dark:text-ink-100">{row.fullName}</p>
-                  <p className="text-[11px] text-ink-400" dir="ltr">
-                    @{row.username}
-                  </p>
                 </div>
               )
             },
@@ -156,10 +155,10 @@ export default function Employees() {
                     size="sm"
                     variant="ghost"
                     icon={KeyRound}
-                    title={t('employees.resetPassword')}
+                    title={t('employees.resetPin')}
                     onClick={() => {
                       setResetFor(row)
-                      setResetPassword('')
+                      setResetPin('')
                     }}
                   />
                   <Button
@@ -197,9 +196,6 @@ export default function Employees() {
             <Field label={t('setup.ownerName')} required className="sm:col-span-2">
               <Input value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} />
             </Field>
-            <Field label={t('auth.username')} required>
-              <Input value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} dir="ltr" />
-            </Field>
             <Field label={t('employees.role')} required>
               <Select value={form.roleId} onChange={(event) => setForm({ ...form, roleId: event.target.value })}>
                 {roleOptions.map((role) => (
@@ -212,11 +208,17 @@ export default function Employees() {
             <Field label={t('common.phone')}>
               <Input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} dir="ltr" />
             </Field>
-            <Field label={t('auth.password')} hint={form.id ? t('common.yes') : t('auth.passwordHint')}>
+            <Field
+              label={form.id ? t('employees.resetPin') : t('employees.setPin')}
+              hint={form.id ? t('employees.pinHint') : t('auth.pinHint')}
+              className="sm:col-span-2"
+            >
               <Input
                 type="password"
-                value={form.password}
-                onChange={(event) => setForm({ ...form, password: event.target.value })}
+                inputMode="numeric"
+                className="ltr tracking-[0.5em]"
+                value={form.pin}
+                onChange={(event) => setForm({ ...form, pin: onlyPin(event.target.value) })}
               />
             </Field>
             <p className="sm:col-span-2 flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2 text-[11px] text-brand-700 dark:bg-brand-900/30 dark:text-brand-200">
@@ -229,7 +231,7 @@ export default function Employees() {
 
       <Modal
         open={resetFor !== null}
-        title={t('employees.resetPassword')}
+        title={`${t('employees.resetPin')}${resetFor ? ` — ${resetFor.fullName}` : ''}`}
         onClose={() => setResetFor(null)}
         size="sm"
         footer={
@@ -237,14 +239,20 @@ export default function Employees() {
             <Button variant="secondary" onClick={() => setResetFor(null)}>
               {t('common.cancel')}
             </Button>
-            <Button loading={busy} onClick={() => void submitReset()}>
+            <Button loading={busy} onClick={() => void submitReset()} disabled={!/^\d{4}$/.test(resetPin)}>
               {t('common.save')}
             </Button>
           </>
         }
       >
-        <Field label={t('auth.newPassword')} hint={t('auth.passwordHint')} required>
-          <Input type="password" value={resetPassword} onChange={(event) => setResetPassword(event.target.value)} />
+        <Field label={t('auth.newPin')} hint={t('auth.pinHint')} required>
+          <Input
+            type="password"
+            inputMode="numeric"
+            className="ltr tracking-[0.5em]"
+            value={resetPin}
+            onChange={(event) => setResetPin(onlyPin(event.target.value))}
+          />
         </Field>
         {error ? <p className="mt-2 text-xs text-red-600">{errorText(language, error)}</p> : null}
       </Modal>
