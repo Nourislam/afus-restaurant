@@ -1,0 +1,173 @@
+/* Fonts are bundled with the app (no internet needed) and look the same on
+   Windows and macOS: Inter for Latin text, Cairo for Arabic. */
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/cairo';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(113, 113, 122, 0.4) transparent;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-ink-100 text-ink-800 antialiased dark:bg-ink-950 dark:text-ink-100;
+    font-family: 'Inter Variable', 'Cairo Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    font-feature-settings: 'cv11', 'ss01';
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html[lang='ar'] body {
+    font-family: 'Cairo Variable', 'Inter Variable', system-ui, sans-serif;
+    font-feature-settings: normal;
+  }
+
+  ::selection {
+    @apply bg-brand-700/30 text-white;
+  }
+
+  *:focus {
+    outline: none;
+  }
+
+  *:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 9px;
+    height: 9px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(113, 113, 122, 0.4);
+    border-radius: 999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(113, 113, 122, 0.6);
+  }
+
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+@layer components {
+  .afus-input {
+    @apply w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-800 outline-none transition
+      placeholder:text-ink-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/25
+      disabled:cursor-not-allowed disabled:bg-ink-100
+      dark:border-ink-700 dark:bg-ink-900 dark:text-ink-100 dark:placeholder:text-ink-500 dark:disabled:bg-ink-800;
+  }
+
+  .afus-label {
+    @apply mb-1.5 block text-xs font-semibold text-ink-600 dark:text-ink-300;
+  }
+
+  .afus-card {
+    @apply rounded-2xl border border-ink-200/80 bg-white shadow-card dark:border-ink-800 dark:bg-ink-900;
+  }
+
+  .afus-table th {
+    @apply sticky top-0 z-10 whitespace-nowrap bg-ink-50 px-3 py-2.5 text-start text-[11px] font-semibold uppercase tracking-wide text-ink-500 dark:bg-ink-900 dark:text-ink-400;
+  }
+
+  .afus-table td {
+    @apply border-b border-ink-100 px-3 py-2.5 text-sm dark:border-ink-800/80;
+  }
+
+  .afus-scroll {
+    @apply overflow-y-auto;
+  }
+}
+
+/* Numbers line up in tables and totals */
+.num,
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Codes, phone numbers and amounts stay left-to-right inside Arabic text */
+.ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* Icons that point in the reading direction (arrows, chevrons) */
+[dir='rtl'] .flip-rtl {
+  transform: scaleX(-1);
+}
+
+/* Title bar drag area (frameless / hidden-inset window) */
+.titlebar-drag {
+  -webkit-app-region: drag;
+}
+.titlebar-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* Afus accent gradients */
+.gradient-primary {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+}
+.gradient-success {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+}
+.gradient-danger {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+}
+
+/* A soft moving sheen for skeletons / loading states */
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.06) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 200% 100%;
+}
+
+.fade-in {
+  animation: fade-in 180ms ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

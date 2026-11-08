@@ -1,0 +1,15 @@
+Files reverted from git during the earlier rollback (9 files removed, plus generated .js and empty dirs):
+- .gitignore
+- drizzle.config.ts
+- electron-builder.yml
+- electron.vite.config.ts
+- postcss.config.js
+- src/main/db/client.ts
+- src/main/db/schema.ts
+- src/main/utils/dates.ts
+- src/main/utils/errors.ts
+(plus 41 generated .js under src/main and empty src/main subdirectories)
+
+package.json: restored from package-lock.json; scripts/description/main fields were NOT recoverable (no git history, no backup) and were reported at the time.
+
+Since then, everything has been rebuilt from scratch in this session, without touching any git history (there is none). See docs/verification-snapshot.md for the current state and docs/phase-1-review.md for the review record.

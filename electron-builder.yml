@@ -1,0 +1,32 @@
+appId: com.afus.restaurant
+productName: AFUS Restaurant
+copyright: Copyright © 2026 AFUS
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist-electron/**/*
+  - dist/renderer/**/*
+  - package.json
+
+asar: true
+asarUnpack:
+  - node_modules/sql.js/dist/**
+
+mac:
+  category: public.app-category.business
+  target:
+    - dmg
+    - zip
+
+win:
+  target:
+    - nsis
+
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Office

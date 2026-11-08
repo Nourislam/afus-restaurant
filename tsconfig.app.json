@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "outDir": "./dist-renderer",
+    "rootDir": ".",
+    "composite": false,
+    "incremental": false,
+    "types": ["vite/client"]
+  },
+  "include": ["src/renderer/src"]
+}

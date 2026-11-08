@@ -1,0 +1,20 @@
+node_modules/
+dist/
+dist-electron/
+dist-renderer/
+release/
+coverage/
+.tmp/
+*.log
+npm-debug.log*
+.DS_Store
+.env
+.env.*
+!.env.example
+*.local
+.vscode/
+.idea/
+
+# stray sql.js artifact (accidental ":memory:" path) and tool dirs
+:memory:
+.freebuff/
