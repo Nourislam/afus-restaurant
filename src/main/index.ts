@@ -6,6 +6,12 @@ import { appPaths, ensureDirectories } from './paths'
 import { registerIpcHandlers } from './ipc'
 import { writeAudit } from './services/audit'
 
+/* Restaurant and office machines vary a lot, and some GPU drivers flood the
+   console with harmless "EGL ... Bad attribute" errors. Software rendering is
+   smooth enough for this UI and far more consistent across machines, so we turn
+   hardware acceleration off. Must run before the app is ready. */
+app.disableHardwareAcceleration()
+
 let mainWindow: BrowserWindow | null = null
 
 function createWindow(): void {
