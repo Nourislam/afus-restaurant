@@ -214,7 +214,12 @@ export function buildOrder(id: number): Order {
 }
 
 export function createOrder(input: CreateOrderInput): Order {
-  const session = requireSession()
+  return createOrderAs(requireSession().userId, input)
+}
+
+/** Create an order on behalf of a given user id — used by the website order
+    intake, where there is no logged-in session (the customer is anonymous). */
+export function createOrderAs(actorUserId: number, input: CreateOrderInput): Order {
   const stamp = nowStamp()
   let orderId = 0
   transaction(() => {
@@ -227,7 +232,7 @@ export function createOrder(input: CreateOrderInput): Order {
         input.type,
         input.type === 'dineIn' ? input.tableId ?? null : null,
         input.customerId ?? null,
-        session.userId,
+        actorUserId,
         Math.max(1, Math.floor(input.covers || 1)),
         input.note ?? null,
         input.scheduledFor ?? null,
@@ -248,7 +253,10 @@ export function createOrder(input: CreateOrderInput): Order {
     for (const item of input.items ?? []) insertLine(orderId, item)
     recompute(orderId)
     if (input.type === 'dineIn' && input.tableId) setTableStatus(input.tableId, 'occupied')
-    logStatus(orderId, null, 'new')
+    dbWrite(
+      'INSERT INTO order_status_history (orderId, fromStatus, toStatus, userId, note, createdAt) VALUES (?, ?, ?, ?, ?, ?)',
+      [orderId, null, 'new', actorUserId, null, stamp]
+    )
   })
   writeAudit('orders.create', 'order', orderId, { type: input.type })
   return buildOrder(orderId)

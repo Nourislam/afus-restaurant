@@ -122,7 +122,13 @@ export const CHANNELS = [
   'backup.reveal',
   'web.export',
   'web.server',
-  'web.status'
+  'web.status',
+  'website.state',
+  'website.config',
+  'website.start',
+  'website.stop',
+  'website.export',
+  'website.orders'
 ] as const
 
 export type Channel = (typeof CHANNELS)[number]

@@ -288,5 +288,29 @@ export const MESSAGES: Record<string, Message> = {
   'pos.returnStock': { ar: 'إرجاع للمخزون', fr: 'Retour au stock' },
   'pos.waste': { ar: 'إتلاف', fr: 'Perte' },
   'pos.stockPolicy': { ar: 'المخزون', fr: 'Stock' },
-  'pos.selectItemsFirst': { ar: 'أضف أصنافًا أولًا', fr: 'Ajoutez d’abord des articles' }
+  'pos.selectItemsFirst': { ar: 'أضف أصنافًا أولًا', fr: 'Ajoutez d’abord des articles' },
+
+  // --- Online ordering website (Phase 3) ---
+  'web.nav': { ar: 'الموقع الإلكتروني', fr: 'Site web' },
+  'web.title': { ar: 'الموقع الإلكتروني للطلب', fr: 'Site de commande en ligne' },
+  'web.subtitle': { ar: 'منيو وطلبات عبر الإنترنت، تصل مباشرة إلى البرنامج', fr: 'Menu et commandes en ligne, directement dans le logiciel' },
+  'web.live': { ar: 'يعمل', fr: 'En ligne' },
+  'web.stopped': { ar: 'متوقف', fr: 'Arrêté' },
+  'web.server': { ar: 'خادم الموقع', fr: 'Serveur du site' },
+  'web.turnOn': { ar: 'تشغيل الموقع', fr: 'Démarrer le site' },
+  'web.turnOff': { ar: 'إيقاف الموقع', fr: 'Arrêter le site' },
+  'web.openState': { ar: 'حالة المطعم', fr: 'État du restaurant' },
+  'web.open': { ar: 'مفتوح', fr: 'Ouvert' },
+  'web.closed': { ar: 'مغلق', fr: 'Fermé' },
+  'web.openHint': { ar: 'الزبائن يستطيعون الطلب الآن.', fr: 'Les clients peuvent commander.' },
+  'web.closedHint': { ar: 'الموقع يعرض «مغلق» ويرفض الطلبات.', fr: 'Le site affiche « Fermé » et refuse les commandes.' },
+  'web.scanHint': { ar: 'امسح الرمز بهاتفك أو افتح الرابط', fr: 'Scannez le code ou ouvrez le lien' },
+  'web.preview': { ar: 'معاينة الموقع', fr: 'Aperçu du site' },
+  'web.startToGetLink': { ar: 'شغّل الموقع للحصول على الرابط ورمز QR.', fr: 'Démarrez le site pour obtenir le lien et le QR.' },
+  'web.publish': { ar: 'نشر الموقع', fr: 'Publier le site' },
+  'web.publishHint': { ar: 'صدّر الموقع كملفات جاهزة للنشر على الإنترنت (GitHub Pages…).', fr: 'Exportez le site en fichiers prêts à publier (GitHub Pages…).' },
+  'web.exportSite': { ar: 'تصدير الموقع', fr: 'Exporter le site' },
+  'web.theme': { ar: 'ثيم الموقع', fr: 'Thème du site' },
+  'web.orders': { ar: 'طلبات الموقع', fr: 'Commandes du site' },
+  'web.noOrders': { ar: 'لا طلبات من الموقع بعد', fr: 'Aucune commande du site' }
 }

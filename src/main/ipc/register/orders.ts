@@ -21,6 +21,7 @@ import {
 import { kitchenBoard, setItemKitchenStatus } from '../../services/kitchen'
 import { adjustLoyalty, getCustomer, listCustomers, saveCustomer, toggleFavorite } from '../../services/customers'
 import { exportPdf, listPrinters, printHtml } from '../../services/print'
+import { exportSite, getWebsiteState, setWebsiteConfig, startSite, stopSite, webOrders } from '../../services/website'
 import { registerMany } from '../registry'
 
 const itemSchema = z.object({
@@ -252,5 +253,27 @@ export const ordersChannels = () =>
     {
       channel: 'print.exportPdf',
       definition: { schema: z.object({ html: z.string().max(2_000_000) }), handler: (input: { html: string }) => exportPdf(input) }
-    }
+    },
+
+    // Website (online ordering)
+    { channel: 'website.state', definition: { permission: 'settings.manage', handler: () => getWebsiteState() } },
+    {
+      channel: 'website.config',
+      definition: {
+        permission: 'settings.manage',
+        schema: z.object({
+          theme: z.enum(['fastfood', 'classic', 'cafe', 'grill']).optional(),
+          isOpen: z.boolean().optional(),
+          port: z.number().int().min(1024).max(65535).optional(),
+          orderTypes: z.array(z.enum(['delivery', 'takeaway'])).min(1).optional(),
+          closedMessageAr: z.string().max(240).optional(),
+          closedMessageFr: z.string().max(240).optional()
+        }),
+        handler: (input: Parameters<typeof setWebsiteConfig>[0]) => setWebsiteConfig(input)
+      }
+    },
+    { channel: 'website.start', definition: { permission: 'settings.manage', handler: () => startSite() } },
+    { channel: 'website.stop', definition: { permission: 'settings.manage', handler: () => stopSite() } },
+    { channel: 'website.export', definition: { permission: 'settings.manage', handler: () => exportSite() } },
+    { channel: 'website.orders', definition: { permission: 'orders.view', handler: () => webOrders() } }
   ])

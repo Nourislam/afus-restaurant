@@ -30,6 +30,8 @@ import type {
   TableMap,
   UserRow,
   UserSession,
+  WebsiteConfig,
+  WebsiteState,
   WebStatus
 } from '@shared/types'
 
@@ -325,6 +327,15 @@ export const api = {
     html: (html: string, printerName?: string, silent?: boolean) =>
       call<{ success: boolean; printed: boolean; reason: string | null }>('print.html', { html, printerName, silent }),
     exportPdf: (html: string) => call<{ filePath: string | null }>('print.exportPdf', { html })
+  },
+
+  website: {
+    state: () => call<WebsiteState>('website.state'),
+    config: (patch: Partial<WebsiteConfig>) => call<WebsiteConfig>('website.config', patch),
+    start: () => call<WebsiteConfig>('website.start'),
+    stop: () => call<WebsiteConfig>('website.stop'),
+    export: () => call<{ dir: string; files: string[] }>('website.export'),
+    orders: () => call<OrderSummary[]>('website.orders')
   },
 
   backup: {

@@ -5,6 +5,7 @@ import {
   BookOpen,
   ChevronDown,
   Flame,
+  Globe,
   LayoutDashboard,
   LogOut,
   Menu as MenuIcon,
@@ -81,6 +82,7 @@ export function AppShell() {
   ]
   const management: NavItem[] = [
     { to: '/menu', label: t('nav.menu'), icon: BookOpen, permission: 'menu.view' },
+    { to: '/website', label: t('web.nav'), icon: Globe, permission: 'settings.manage' },
     { to: '/employees', label: t('nav.employees'), icon: ShieldCheck, permission: 'employees.manage' }
   ]
   const system: NavItem[] = [

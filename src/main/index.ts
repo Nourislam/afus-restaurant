@@ -4,6 +4,7 @@ import { closeDatabase, openDatabase } from './db/client'
 import { seedCoreData } from './db/seed'
 import { appPaths, ensureDirectories } from './paths'
 import { registerIpcHandlers } from './ipc'
+import { autostartWebsite } from './services/website'
 import { writeAudit } from './services/audit'
 
 /* Restaurant and office machines vary a lot, and some GPU drivers flood the
@@ -66,6 +67,7 @@ async function bootstrap(): Promise<void> {
   const { implemented, pending } = registerIpcHandlers()
   console.info(`[afus] ${implemented} channels ready, ${pending.length} pending: ${pending.slice(0, 6).join(', ')}…`)
   writeAudit('app.start', 'app', null, { version: app.getVersion() })
+  void autostartWebsite()
   createWindow()
 }
 

@@ -39,6 +39,25 @@ export interface UserRow {
   createdAt: string
 }
 
+export type WebsiteTheme = 'fastfood' | 'classic' | 'cafe' | 'grill'
+
+export interface WebsiteConfig {
+  theme: WebsiteTheme
+  isOpen: boolean
+  port: number
+  orderTypes: ('delivery' | 'takeaway')[]
+  running: boolean
+  closedMessageAr: string
+  closedMessageFr: string
+}
+
+export interface WebsiteState extends WebsiteConfig {
+  url: string | null
+  lanUrl: string | null
+  qrDataUrl: string | null
+  themes: { id: WebsiteTheme; label: Localized }[]
+}
+
 /** Shown on the login screen (pre-auth): just enough to pick a profile. No secrets. */
 export interface LoginProfile {
   id: number

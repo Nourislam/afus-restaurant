@@ -16,6 +16,7 @@ import Pos from './pages/Pos'
 import Kitchen from './pages/Kitchen'
 import Orders from './pages/Orders'
 import OrderDetail from './pages/OrderDetail'
+import Website from './pages/Website'
 
 type Phase = 'loading' | 'setup' | 'login' | 'ready' | 'error'
 
@@ -97,6 +98,7 @@ export default function App() {
           <Route path="/orders" element={<Orders />} />
           <Route path="/orders/:id" element={<OrderDetail />} />
           <Route path="/menu" element={<Menu />} />
+          <Route path="/website" element={<Website />} />
           <Route path="/employees" element={<Employees />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />
