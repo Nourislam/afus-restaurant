@@ -4,12 +4,15 @@ import { clsx } from 'clsx'
 import {
   BookOpen,
   ChevronDown,
+  Flame,
   LayoutDashboard,
   LogOut,
   Menu as MenuIcon,
   Moon,
+  ReceiptText,
   Settings as SettingsIcon,
   ShieldCheck,
+  ShoppingCart,
   Sun,
   UtensilsCrossed,
   X,
@@ -71,7 +74,10 @@ export function AppShell() {
   }
   const operations: NavItem[] = [
     { to: '/', label: t('nav.dashboard'), icon: LayoutDashboard, permission: 'dashboard.view', exact: true },
-    { to: '/tables', label: t('nav.tables'), icon: UtensilsCrossed, permission: ['tables.manage', 'pos.use'] }
+    { to: '/pos', label: t('nav.pos'), icon: ShoppingCart, permission: 'pos.use' },
+    { to: '/tables', label: t('nav.tables'), icon: UtensilsCrossed, permission: ['tables.manage', 'pos.use'] },
+    { to: '/kitchen', label: t('nav.kitchen'), icon: Flame, permission: 'kitchen.view' },
+    { to: '/orders', label: t('nav.orders'), icon: ReceiptText, permission: 'orders.view' }
   ]
   const management: NavItem[] = [
     { to: '/menu', label: t('nav.menu'), icon: BookOpen, permission: 'menu.view' },

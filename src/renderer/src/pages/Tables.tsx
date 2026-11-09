@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Pencil, Plus, Settings, Trash2, Users, UtensilsCrossed } from 'lucide-react'
+import { ArrowRight, Clock, Pencil, Plus, Settings, Trash2, Users, UtensilsCrossed } from 'lucide-react'
 import type { DiningArea, RestaurantTable, TableStatus } from '@shared/types'
 import { api } from '../lib/api'
-import { useApi, useAppEvent } from '../lib/hooks'
+import { useApi, useAppEvent, useInterval } from '../lib/hooks'
 import { useT } from '../i18n'
 import { useAppStore } from '../store/app'
 import { formatDate, formatTime } from '../lib/format'
@@ -53,11 +53,26 @@ const STATUS_STYLES: Record<
   }
 }
 
+function sittingMinutes(openedAt: string | null | undefined): number {
+  if (!openedAt) return 0
+  const then = new Date(openedAt.replace(' ', 'T')).getTime()
+  if (Number.isNaN(then)) return 0
+  return Math.max(0, Math.floor((Date.now() - then) / 60000))
+}
+
+function durationText(minutes: number): string {
+  if (minutes < 60) return `${minutes}′`
+  return `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, '0')}`
+}
+
 export default function TablesPage() {
   const { t, language } = useT()
   const navigate = useNavigate()
   const can = useAppStore((state) => state.can)
   const map = useApi(() => api.tables.map(), [])
+  const [, setTick] = useState(0)
+  // Keep the "sitting for N min" timers fresh without re-fetching.
+  useInterval(() => setTick((value) => value + 1), 30000)
   useAppEvent((event) => {
     if (event.type.startsWith('order') || event.type.startsWith('table')) void map.reload()
   })
@@ -216,8 +231,21 @@ export default function TablesPage() {
 
                     {table.openOrderId ? (
                       <div className="mt-3 rounded-lg bg-white/70 px-2 py-1.5 text-[11px] dark:bg-slate-950/40">
-                        <p className="font-semibold text-slate-700 dark:text-slate-200">{table.openOrderNumber}</p>
-                        <p className="text-slate-500">{table.openOrderTotalCents / 100} · {table.waiterName ?? '—'}</p>
+                        <div className="flex items-center justify-between font-semibold text-slate-700 dark:text-slate-200">
+                          <span className="num" dir="ltr">{table.openOrderNumber}</span>
+                          <span className="num text-amber-600 dark:text-amber-400" dir="ltr">{table.openOrderTotalCents / 100} DZD</span>
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-2 text-slate-500">
+                          <span className="inline-flex items-center gap-0.5">
+                            <Users className="h-3 w-3" />
+                            {table.openOrderCovers ?? table.seats}
+                          </span>
+                          <span className="inline-flex items-center gap-0.5">
+                            <Clock className="h-3 w-3" />
+                            {durationText(sittingMinutes(table.openOrderOpenedAt))}
+                          </span>
+                          <span className="ms-auto truncate">{table.waiterName ?? '—'}</span>
+                        </div>
                       </div>
                     ) : (
                       <p className="mt-3 text-[11px] text-slate-400">

@@ -155,7 +155,7 @@ export default function KitchenPage() {
                   const minutes = Math.max(ticket.elapsedMinutes, elapsedMinutes(ticket.createdAt))
                   const late = minutes >= (settings?.kitchenAlertMinutes ?? 15)
                   return (
-                    <Card key={ticket.orderId} className={`overflow-hidden ${late ? 'ring-1 ring-red-300' : ''}`}>
+                    <Card key={ticket.orderId} className={`animate-scale-in overflow-hidden transition-shadow ${late ? 'ring-1 ring-red-400 shadow-glow' : ''}`}>
                       <div className={`flex items-start justify-between gap-2 px-3 py-2 ${late ? 'bg-red-50 dark:bg-red-950/30' : 'bg-slate-50 dark:bg-slate-800/50'}`}>
                         <div>
                           <p className="text-sm font-bold text-slate-900 dark:text-white">{ticket.orderNumber}</p>

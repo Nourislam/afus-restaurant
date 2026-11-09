@@ -59,6 +59,7 @@ export default function PosPage() {
   const [draft, setDraft] = useState<DraftLine[]>([])
   const [type, setType] = useState<OrderType>('dineIn')
   const [tableId, setTableId] = useState('')
+  const [covers, setCovers] = useState('2')
   const [customerId, setCustomerId] = useState('')
   const [note, setNote] = useState('')
   const [schedule, setSchedule] = useState('')
@@ -252,6 +253,7 @@ export default function PosPage() {
       const created = await api.orders.create({
         type,
         tableId: type === 'dineIn' ? Number(tableId) : null,
+        covers: type === 'dineIn' ? Math.max(1, Number(covers) || 1) : null,
         customerId: customerId ? Number(customerId) : null,
         note: note.trim() || null,
         scheduledFor: type === 'preorder' ? schedule.replace('T', ' ') : null,
@@ -507,22 +509,53 @@ export default function PosPage() {
             </div>
 
             {type === 'dineIn' ? (
-              <Field label={t('pos.table')}>
-                <Select
-                  value={tableId}
-                  disabled={typeLocked}
-                  onChange={(event) => setTableId(event.target.value)}
-                >
-                  <option value="">{t('pos.selectTable')}</option>
-                  {tables
-                    .filter((table) => table.status !== 'occupied' || String(table.id) === tableId)
-                    .map((table) => (
-                      <option key={table.id} value={table.id}>
-                        {table.name} · {table.seats} {t('tables.seats')}
-                      </option>
-                    ))}
-                </Select>
-              </Field>
+              <div className="grid grid-cols-[1fr_auto] gap-2">
+                <Field label={t('pos.table')}>
+                  <Select
+                    value={tableId}
+                    disabled={typeLocked}
+                    onChange={(event) => setTableId(event.target.value)}
+                  >
+                    <option value="">{t('pos.selectTable')}</option>
+                    {tables
+                      .filter((table) => table.status !== 'occupied' || String(table.id) === tableId)
+                      .map((table) => (
+                        <option key={table.id} value={table.id}>
+                          {table.name} · {table.seats} {t('tables.seats')}
+                        </option>
+                      ))}
+                  </Select>
+                </Field>
+                <Field label={t('pos.covers')}>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={typeLocked}
+                      onClick={() => setCovers((v) => String(Math.max(1, (Number(v) || 1) - 1)))}
+                      className="h-9 w-9 shrink-0 rounded-lg border border-ink-200 text-lg font-bold text-ink-500 transition hover:bg-ink-50 disabled:opacity-50 dark:border-ink-700 dark:hover:bg-ink-800"
+                    >
+                      −
+                    </button>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={99}
+                      value={covers}
+                      disabled={typeLocked}
+                      onChange={(event) => setCovers(event.target.value)}
+                      className="w-14 text-center"
+                    />
+                    <button
+                      type="button"
+                      disabled={typeLocked}
+                      onClick={() => setCovers((v) => String(Math.min(99, (Number(v) || 1) + 1)))}
+                      className="h-9 w-9 shrink-0 rounded-lg border border-ink-200 text-lg font-bold text-ink-500 transition hover:bg-ink-50 disabled:opacity-50 dark:border-ink-700 dark:hover:bg-ink-800"
+                    >
+                      +
+                    </button>
+                  </div>
+                </Field>
+              </div>
             ) : null}
 
             {type === 'preorder' ? (

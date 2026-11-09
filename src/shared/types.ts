@@ -177,6 +177,9 @@ export interface RestaurantTable {
   openOrderNumber: string | null
   openOrderTotalCents: number
   waiterName: string | null
+  /** For an occupied table: how many are seated and when the order opened. */
+  openOrderCovers: number | null
+  openOrderOpenedAt: string | null
 }
 
 export interface TableMap {
@@ -294,6 +297,7 @@ export interface Order {
   paidCents: number
   dueCents: number
   note: string | null
+  covers: number
   isHeld: boolean
   stockDeducted: boolean
   scheduledFor: string | null

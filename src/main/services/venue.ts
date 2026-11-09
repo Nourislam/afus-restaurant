@@ -20,7 +20,8 @@ export function tableMap(): TableMap {
   const tables = dbAll<RestaurantTable>(
     `SELECT t.id, t.areaId, t.name, t.seats, t.status, t.positionX, t.positionY, t.isArchived,
             o.id AS openOrderId, o.orderNumber AS openOrderNumber,
-            COALESCE(o.totalCents, 0) AS openOrderTotalCents, u.fullName AS waiterName
+            COALESCE(o.totalCents, 0) AS openOrderTotalCents, u.fullName AS waiterName,
+            o.covers AS openOrderCovers, o.createdAt AS openOrderOpenedAt
        FROM dining_tables t
        LEFT JOIN orders o ON o.tableId = t.id AND ${OPEN_ORDER}
        LEFT JOIN users u ON u.id = o.userId

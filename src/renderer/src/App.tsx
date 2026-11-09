@@ -12,6 +12,10 @@ import Employees from './pages/Employees'
 import Settings from './pages/Settings'
 import LoginPage from './pages/Login'
 import SetupPage from './pages/Setup'
+import Pos from './pages/Pos'
+import Kitchen from './pages/Kitchen'
+import Orders from './pages/Orders'
+import OrderDetail from './pages/OrderDetail'
 
 type Phase = 'loading' | 'setup' | 'login' | 'ready' | 'error'
 
@@ -88,6 +92,10 @@ export default function App() {
         <Route element={<AppShell />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/tables" element={<Tables />} />
+          <Route path="/pos" element={<Pos />} />
+          <Route path="/kitchen" element={<Kitchen />} />
+          <Route path="/orders" element={<Orders />} />
+          <Route path="/orders/:id" element={<OrderDetail />} />
           <Route path="/menu" element={<Menu />} />
           <Route path="/employees" element={<Employees />} />
           <Route path="/settings" element={<Settings />} />

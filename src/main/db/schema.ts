@@ -5,7 +5,7 @@
  * column name, so services hand domain objects straight to the renderer without
  * a mapping layer (and without the drift that comes with one).
  */
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 
 const V1 = `
 CREATE TABLE IF NOT EXISTS roles (
@@ -408,7 +408,14 @@ const V2 = `
 ALTER TABLE users ADD COLUMN pinHash TEXT;
 `
 
+/* V3 — table occupancy: how many people are seated on a dine-in order. Sitting
+   duration is derived from the order's createdAt, so no extra column is needed. */
+const V3 = `
+ALTER TABLE orders ADD COLUMN covers INTEGER NOT NULL DEFAULT 1;
+`
+
 export const MIGRATIONS: Record<number, string> = {
   1: V1,
-  2: V2
+  2: V2,
+  3: V3
 }
