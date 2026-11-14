@@ -23,6 +23,9 @@ import type {
   Recipe,
   Reservation,
   RestaurantTable,
+  Branch,
+  BranchHours,
+  BranchOverride,
   LoginProfile,
   RoleRow,
   Supplier,
@@ -336,6 +339,17 @@ export const api = {
     stop: () => call<WebsiteConfig>('website.stop'),
     export: () => call<{ dir: string; files: string[] }>('website.export'),
     orders: () => call<OrderSummary[]>('website.orders')
+  },
+
+  branches: {
+    list: (includeInactive = false) => call<Branch[]>('branches.list', { includeInactive }),
+    save: (input: { id?: number; nameAr: string; nameFr: string; address?: string | null; phone?: string | null; hours?: BranchHours; deliveryNote?: string | null; sortOrder?: number }) =>
+      call<Branch>('branches.save', input),
+    setOpen: (id: number, isOpen: boolean) => call<Branch>('branches.setOpen', { id, isOpen }),
+    setActive: (id: number, active: boolean) => call<Branch>('branches.setActive', { id, active }),
+    overrides: (branchId: number) => call<BranchOverride[]>('branches.overrides', { branchId }),
+    setOverride: (input: { branchId: number; productId: number; priceCents?: number | null; isAvailable?: boolean | null }) =>
+      call<BranchOverride | null>('branches.setOverride', input)
   },
 
   backup: {

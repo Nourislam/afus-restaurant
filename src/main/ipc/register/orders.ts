@@ -22,7 +22,12 @@ import { kitchenBoard, setItemKitchenStatus } from '../../services/kitchen'
 import { adjustLoyalty, getCustomer, listCustomers, saveCustomer, toggleFavorite } from '../../services/customers'
 import { exportPdf, listPrinters, printHtml } from '../../services/print'
 import { exportSite, getWebsiteState, setWebsiteConfig, startSite, stopSite, webOrders } from '../../services/website'
+import { listBranches, listOverrides, saveBranch, setBranchActive, setBranchOpen, setOverride } from '../../services/branches'
 import { registerMany } from '../registry'
+
+const hoursSchema = z
+  .record(z.enum(['0', '1', '2', '3', '4', '5', '6']), z.object({ open: z.string().regex(/^\d{2}:\d{2}$/), close: z.string().regex(/^\d{2}:\d{2}$/) }).nullable())
+  .optional()
 
 const itemSchema = z.object({
   productId: z.number().int().positive(),
@@ -262,7 +267,7 @@ export const ordersChannels = () =>
       definition: {
         permission: 'settings.manage',
         schema: z.object({
-          theme: z.enum(['fastfood', 'classic', 'cafe', 'grill']).optional(),
+          theme: z.enum(['ember', 'noir', 'sable', 'nar']).optional(),
           isOpen: z.boolean().optional(),
           port: z.number().int().min(1024).max(65535).optional(),
           orderTypes: z.array(z.enum(['delivery', 'takeaway'])).min(1).optional(),
@@ -275,5 +280,69 @@ export const ordersChannels = () =>
     { channel: 'website.start', definition: { permission: 'settings.manage', handler: () => startSite() } },
     { channel: 'website.stop', definition: { permission: 'settings.manage', handler: () => stopSite() } },
     { channel: 'website.export', definition: { permission: 'settings.manage', handler: () => exportSite() } },
-    { channel: 'website.orders', definition: { permission: 'orders.view', handler: () => webOrders() } }
+    { channel: 'website.orders', definition: { permission: 'orders.view', handler: () => webOrders() } },
+
+    // Branches (multi-site)
+    {
+      channel: 'branches.list',
+      definition: {
+        permission: ['pos.use', 'settings.manage'],
+        schema: z.object({ includeInactive: z.boolean().optional() }).default({}),
+        handler: (input: { includeInactive?: boolean }) => listBranches(Boolean(input.includeInactive))
+      }
+    },
+    {
+      channel: 'branches.save',
+      definition: {
+        permission: 'settings.manage',
+        schema: z.object({
+          id: z.number().int().positive().optional(),
+          nameAr: z.string().min(1).max(120),
+          nameFr: z.string().max(120),
+          address: z.string().max(240).nullish(),
+          phone: z.string().max(40).nullish(),
+          hours: hoursSchema,
+          deliveryNote: z.string().max(240).nullish(),
+          sortOrder: z.number().int().min(0).optional()
+        }),
+        handler: (input: Parameters<typeof saveBranch>[0]) => saveBranch(input)
+      }
+    },
+    {
+      channel: 'branches.setOpen',
+      definition: {
+        permission: ['pos.use', 'settings.manage'],
+        schema: z.object({ id: z.number().int().positive(), isOpen: z.boolean() }),
+        handler: (input: { id: number; isOpen: boolean }) => setBranchOpen(input.id, input.isOpen)
+      }
+    },
+    {
+      channel: 'branches.setActive',
+      definition: {
+        permission: 'settings.manage',
+        schema: z.object({ id: z.number().int().positive(), active: z.boolean() }),
+        handler: (input: { id: number; active: boolean }) => setBranchActive(input.id, input.active)
+      }
+    },
+    {
+      channel: 'branches.overrides',
+      definition: {
+        permission: 'settings.manage',
+        schema: z.object({ branchId: z.number().int().positive() }),
+        handler: (input: { branchId: number }) => listOverrides(input.branchId)
+      }
+    },
+    {
+      channel: 'branches.setOverride',
+      definition: {
+        permission: 'settings.manage',
+        schema: z.object({
+          branchId: z.number().int().positive(),
+          productId: z.number().int().positive(),
+          priceCents: z.number().int().min(0).nullish(),
+          isAvailable: z.boolean().nullish()
+        }),
+        handler: (input: Parameters<typeof setOverride>[0]) => setOverride(input)
+      }
+    }
   ])

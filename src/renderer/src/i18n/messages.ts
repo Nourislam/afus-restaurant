@@ -289,6 +289,8 @@ export const MESSAGES: Record<string, Message> = {
   'pos.waste': { ar: 'إتلاف', fr: 'Perte' },
   'pos.stockPolicy': { ar: 'المخزون', fr: 'Stock' },
   'pos.selectItemsFirst': { ar: 'أضف أصنافًا أولًا', fr: 'Ajoutez d’abord des articles' },
+  'pos.delivery': { ar: 'توصيل', fr: 'Livraison' },
+  'pos.pickup': { ar: 'استلام', fr: 'À emporter' },
 
   // --- Online ordering website (Phase 3) ---
   'web.nav': { ar: 'الموقع الإلكتروني', fr: 'Site web' },
@@ -312,5 +314,33 @@ export const MESSAGES: Record<string, Message> = {
   'web.exportSite': { ar: 'تصدير الموقع', fr: 'Exporter le site' },
   'web.theme': { ar: 'ثيم الموقع', fr: 'Thème du site' },
   'web.orders': { ar: 'طلبات الموقع', fr: 'Commandes du site' },
-  'web.noOrders': { ar: 'لا طلبات من الموقع بعد', fr: 'Aucune commande du site' }
+  'web.noOrders': { ar: 'لا طلبات من الموقع بعد', fr: 'Aucune commande du site' },
+
+  // --- Branches + site per owner (Phase 4) ---
+  'web.branches': { ar: 'الفروع', fr: 'Succursales' },
+  'web.branchesHint': { ar: 'لكل فرع أوقاته وحالته ورمز QR الخاص به. فرع واحد يكفي للمطعم الواحد.', fr: 'Chaque succursale a ses horaires, son état et son QR. Une seule suffit pour un restaurant.' },
+  'web.addBranch': { ar: 'إضافة فرع', fr: 'Ajouter une succursale' },
+  'web.editBranch': { ar: 'تعديل الفرع', fr: 'Modifier la succursale' },
+  'web.branchNameAr': { ar: 'اسم الفرع (عربي)', fr: 'Nom (arabe)' },
+  'web.branchNameFr': { ar: 'اسم الفرع (فرنسي)', fr: 'Nom (français)' },
+  'web.deliveryNote': { ar: 'ملاحظة التوصيل (المنطقة)', fr: 'Note livraison (zone)' },
+  'web.hours': { ar: 'أوقات العمل', fr: 'Horaires' },
+  'web.hoursHint': { ar: 'اتركها فارغة ليُعتمد زر مفتوح/مغلق فقط.', fr: 'Laissez vide pour n’utiliser que le bouton ouvert/fermé.' },
+  'web.closedDay': { ar: 'مغلق', fr: 'Fermé' },
+  'web.openNow': { ar: 'مفتوح الآن', fr: 'Ouvert maintenant' },
+  'web.closedNow': { ar: 'مغلق الآن', fr: 'Fermé maintenant' },
+  'web.branchQr': { ar: 'رمز QR للفرع', fr: 'QR de la succursale' },
+  'web.deactivateBranch': { ar: 'تعطيل الفرع', fr: 'Désactiver' },
+  'web.activateBranch': { ar: 'تفعيل الفرع', fr: 'Activer' },
+  'web.slug': { ar: 'معرّف الموقع (بالحروف اللاتينية)', fr: 'Identifiant du site (lettres latines)' },
+  'web.slugHint': { ar: 'يُستعمل في رابط الموقع واسمه على Claude. مثال: djemr-alger', fr: 'Utilisé dans l’adresse du site et son nom sur Claude. Ex. : djemr-alger' },
+  'web.publishClaude': { ar: 'موقعك على Claude', fr: 'Votre site sur Claude' },
+  'web.publishClaudeHint': { ar: 'صدّر الموقع ثم انشره كـArtifact على claude.ai ليحصل مطعمك على رابطه الخاص.', fr: 'Exportez le site puis publiez-le comme Artifact sur claude.ai : votre restaurant obtient son propre lien.' },
+  'days.0': { ar: 'الأحد', fr: 'Dim' },
+  'days.1': { ar: 'الإثنين', fr: 'Lun' },
+  'days.2': { ar: 'الثلاثاء', fr: 'Mar' },
+  'days.3': { ar: 'الأربعاء', fr: 'Mer' },
+  'days.4': { ar: 'الخميس', fr: 'Jeu' },
+  'days.5': { ar: 'الجمعة', fr: 'Ven' },
+  'days.6': { ar: 'السبت', fr: 'Sam' }
 }

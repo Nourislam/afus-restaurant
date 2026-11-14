@@ -5,7 +5,7 @@
  * column name, so services hand domain objects straight to the renderer without
  * a mapping layer (and without the drift that comes with one).
  */
-export const SCHEMA_VERSION = 3
+export const SCHEMA_VERSION = 4
 
 const V1 = `
 CREATE TABLE IF NOT EXISTS roles (
@@ -414,8 +414,37 @@ const V3 = `
 ALTER TABLE orders ADD COLUMN covers INTEGER NOT NULL DEFAULT 1;
 `
 
+/* V4 — branches: one restaurant (tenant) can run several branches, each with its
+   own hours, open/closed state, phone/address and per-product price/availability
+   overrides on top of the shared core menu. A single-site owner just has one
+   default branch, so nothing changes for them. */
+const V4 = `
+CREATE TABLE IF NOT EXISTS branches (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  nameAr TEXT NOT NULL,
+  nameFr TEXT NOT NULL,
+  address TEXT,
+  phone TEXT,
+  hoursJson TEXT NOT NULL DEFAULT '{}',
+  isOpen INTEGER NOT NULL DEFAULT 1,
+  deliveryNote TEXT,
+  sortOrder INTEGER NOT NULL DEFAULT 0,
+  isActive INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS branch_product_overrides (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  branchId INTEGER NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+  productId INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  priceCents INTEGER,
+  isAvailable INTEGER,
+  UNIQUE (branchId, productId)
+);
+`
+
 export const MIGRATIONS: Record<number, string> = {
   1: V1,
   2: V2,
-  3: V3
+  3: V3,
+  4: V4
 }

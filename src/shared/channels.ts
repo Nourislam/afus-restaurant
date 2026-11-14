@@ -128,7 +128,13 @@ export const CHANNELS = [
   'website.start',
   'website.stop',
   'website.export',
-  'website.orders'
+  'website.orders',
+  'branches.list',
+  'branches.save',
+  'branches.setOpen',
+  'branches.setActive',
+  'branches.overrides',
+  'branches.setOverride'
 ] as const
 
 export type Channel = (typeof CHANNELS)[number]

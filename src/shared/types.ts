@@ -39,7 +39,33 @@ export interface UserRow {
   createdAt: string
 }
 
-export type WebsiteTheme = 'fastfood' | 'classic' | 'cafe' | 'grill'
+/** Opening hours per weekday (0 = Sunday … 6 = Saturday); null/missing = closed that day. */
+export type BranchHours = Partial<Record<'0' | '1' | '2' | '3' | '4' | '5' | '6', { open: string; close: string } | null>>
+
+export interface Branch {
+  id: number
+  nameAr: string
+  nameFr: string
+  address: string | null
+  phone: string | null
+  hours: BranchHours
+  /** Manual switch set by the owner. */
+  isOpen: boolean
+  deliveryNote: string | null
+  sortOrder: number
+  isActive: boolean
+  /** Effective state right now: manual switch AND inside today's hours. */
+  openNow: boolean
+}
+
+export interface BranchOverride {
+  branchId: number
+  productId: number
+  priceCents: number | null
+  isAvailable: boolean | null
+}
+
+export type WebsiteTheme = 'ember' | 'noir' | 'sable' | 'nar'
 
 export interface WebsiteConfig {
   theme: WebsiteTheme
@@ -56,6 +82,11 @@ export interface WebsiteState extends WebsiteConfig {
   lanUrl: string | null
   qrDataUrl: string | null
   themes: { id: WebsiteTheme; label: Localized }[]
+  /** The tenant id used in the site URL / artifact name. */
+  slug: string
+  branches: Branch[]
+  /** One QR per branch (data URL), keyed by branch id, when the site is running. */
+  branchQr: Record<number, string>
 }
 
 /** Shown on the login screen (pre-auth): just enough to pick a profile. No secrets. */
@@ -84,6 +115,8 @@ export interface AppSettings {
   theme: 'light' | 'dark'
   /** 'simple' trims the sidebar to the essentials for floor staff; 'full' shows everything (managers). */
   uiMode: 'simple' | 'full'
+  /** URL-safe tenant id for the restaurant's own site (a-z, 0-9, dashes). */
+  restaurantSlug: string
   taxEnabled: boolean
   taxRateBp: number
   taxInclusive: boolean
