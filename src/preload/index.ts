@@ -9,6 +9,9 @@ import { BRIDGE_CHANNEL, type AppEvent, type IpcResult } from '@shared/ipc'
 const allowed = new Set<string>(CHANNELS)
 
 const bridge = {
+  /** 'darwin' | 'win32' | 'linux'. The window bar needs it before its first
+   *  paint to leave room for the system's own window buttons. */
+  platform: process.platform,
   invoke: async (channel: string, payload?: unknown): Promise<IpcResult> => {
     if (!allowed.has(channel)) return { ok: false, error: { code: 'CHANNEL_NOT_ALLOWED' } }
     try {

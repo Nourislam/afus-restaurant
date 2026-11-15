@@ -14,8 +14,20 @@ declare module '*.png' {
 declare global {
   interface Window {
     afus: {
+      platform?: string
       invoke: <T = unknown>(channel: string, payload?: unknown) => Promise<IpcResult<T>>
       onEvent: (handler: (event: AppEvent) => void) => () => void
+    }
+  }
+
+  /** Chromium's Window Controls Overlay, present when the window draws its own
+   *  buttons over the page. It reports exactly which strip is left free. */
+  interface Navigator {
+    windowControlsOverlay?: {
+      visible: boolean
+      getTitlebarAreaRect: () => DOMRect
+      addEventListener: (type: 'geometrychange', handler: () => void) => void
+      removeEventListener: (type: 'geometrychange', handler: () => void) => void
     }
   }
 }

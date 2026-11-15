@@ -5,17 +5,44 @@ import { AfusMark } from './AfusLogo'
 import { useT } from '../i18n'
 import { formatDate, formatTime } from '../lib/format'
 
-const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform)
+import { windowControlsInset, type WindowControlsInset } from '../lib/windowControls'
+
+const platform = (): string | undefined => {
+  if (typeof window !== 'undefined' && window.afus?.platform) return window.afus.platform
+  /* Outside Electron (the renderer opened in a browser for a design check). */
+  return typeof navigator !== 'undefined' && /Mac/i.test(navigator.userAgent) ? 'darwin' : undefined
+}
+
+const readInset = (): WindowControlsInset =>
+  typeof navigator === 'undefined'
+    ? { left: 0, right: 0 }
+    : windowControlsInset(platform(), navigator.windowControlsOverlay, window.innerWidth)
+
+function useWindowControlsInset(): WindowControlsInset {
+  const [inset, setInset] = useState<WindowControlsInset>(readInset)
+  useEffect(() => {
+    const overlay = navigator.windowControlsOverlay
+    const update = (): void => setInset(readInset())
+    /* The free strip changes when the window is resized or maximised. */
+    window.addEventListener('resize', update)
+    overlay?.addEventListener('geometrychange', update)
+    update()
+    return () => {
+      window.removeEventListener('resize', update)
+      overlay?.removeEventListener('geometrychange', update)
+    }
+  }, [])
+  return inset
+}
 
 /**
- * Window bar, matching Afus Boutique/Hanout: the program's own mark at the
- * start, the date and time centred in the window whatever the language, and the
- * global switches at the end. The window buttons are the system's own, drawn
- * over this bar, so their space is kept free with a physical padding that does
- * not flip in Arabic.
+ * Window bar, matching Afus Boutique/Hanout: the program's mark at the start,
+ * the date and time centred in the free strip, and the global switches at the
+ * end. Nothing of ours is ever placed under a system window button.
  */
 export function TitleBar({ bare, children }: { bare?: boolean; children?: ReactNode }) {
   const { t } = useT()
+  const inset = useWindowControlsInset()
   const [now, setNow] = useState(() => new Date())
 
   useEffect(() => {
@@ -24,11 +51,14 @@ export function TitleBar({ bare, children }: { bare?: boolean; children?: ReactN
     return () => clearInterval(timer)
   }, [bare])
 
-  /* macOS traffic lights take ~78px on the left; Windows/Linux buttons ~140px on the right. */
+  const GUTTER = 12
+
   return (
     <header
       className="titlebar-drag relative flex h-10 flex-none select-none items-center gap-3 border-b border-ink-200/70 bg-ink-100/80 backdrop-blur dark:border-ink-800 dark:bg-ink-950/80"
-      style={{ paddingInlineStart: isMac ? 78 : 12, paddingInlineEnd: 10 }}
+      /* Physical sides on purpose — these must not flip with the language. */
+      style={{ paddingLeft: inset.left + GUTTER, paddingRight: inset.right + GUTTER }}
+      data-testid="titlebar"
     >
       <div className={clsx('flex min-w-0 items-center gap-2', bare && 'opacity-90')} title={t('app.name')}>
         <AfusMark className="h-[18px] w-[18px] rounded-[5px]" title={t('app.name')} />
@@ -39,17 +69,19 @@ export function TitleBar({ bare, children }: { bare?: boolean; children?: ReactN
 
       {bare ? null : (
         <>
-          {/* Centred in the window, so the language and the window buttons never move it. */}
+          {/* Centred inside the strip the window buttons leave free, so it can
+              never end up underneath one of them on a narrow window. */}
           <div
-            className="pointer-events-none absolute inset-y-0 left-1/2 flex -translate-x-1/2 items-center gap-2.5 whitespace-nowrap text-xs text-ink-400 dark:text-ink-500"
+            className="pointer-events-none absolute inset-y-0 flex items-center justify-center gap-2.5 whitespace-nowrap text-xs text-ink-400 dark:text-ink-500"
+            style={{ left: inset.left, right: inset.right }}
             aria-hidden
           >
-            <span className="hidden md:inline">{formatDate(now)}</span>
+            <span className="hidden lg:inline">{formatDate(now)}</span>
             <span className="num font-semibold text-ink-600 dark:text-ink-300">{formatTime(now)}</span>
           </div>
 
           <span
-            className="hidden items-center gap-1.5 rounded-md bg-ink-200/70 px-2 py-0.5 text-[11px] font-medium text-ink-500 sm:inline-flex dark:bg-ink-800/80 dark:text-ink-400"
+            className="z-10 hidden items-center gap-1.5 rounded-md bg-ink-200/70 px-2 py-0.5 text-[11px] font-medium text-ink-500 sm:inline-flex dark:bg-ink-800/80 dark:text-ink-400"
             title={t('setup.localOnly')}
           >
             <WifiOff className="h-3 w-3" />
@@ -58,7 +90,7 @@ export function TitleBar({ bare, children }: { bare?: boolean; children?: ReactN
         </>
       )}
 
-      {children ? <div className="titlebar-no-drag flex items-center gap-1">{children}</div> : null}
+      {children ? <div className="titlebar-no-drag z-10 flex items-center gap-1">{children}</div> : null}
     </header>
   )
 }
