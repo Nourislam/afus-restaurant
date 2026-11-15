@@ -1,15 +1,15 @@
 import { useMemo, useState } from 'react'
+import { clsx } from 'clsx'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Clock, Pencil, Plus, Settings, Trash2, Users, UtensilsCrossed } from 'lucide-react'
+import { ArrowRight, Clock, Pencil, Plus, Settings, Sparkles, Timer, Trash2, Users, UtensilsCrossed } from 'lucide-react'
 import type { DiningArea, RestaurantTable, TableStatus } from '@shared/types'
 import { api } from '../lib/api'
 import { useApi, useAppEvent, useInterval } from '../lib/hooks'
 import { useT } from '../i18n'
 import { useAppStore } from '../store/app'
-import { formatDate, formatTime } from '../lib/format'
-import { tableStatusLabel, tableStatusTone } from '../lib/labels'
+import { formatMoney } from '../lib/format'
+import { tableStatusLabel } from '../lib/labels'
 import {
-  Badge,
   Button,
   Card,
   Confirm,
@@ -20,36 +20,38 @@ import {
   Loading,
   Modal,
   PageHeader,
-  Select
+  Select,
+  Tabs
 } from '../components/ui'
 
-const STATUS_STYLES: Record<
-  TableStatus,
-  { card: string; dot: string; ping: boolean; live: boolean }
-> = {
+/* A party is "settled" after about an hour and a half; past that the ring is full
+   and the table asks for attention, which is the one thing motion is used for here. */
+const SITTING_FULL_MINUTES = 90
+
+const STATUS_STYLES: Record<TableStatus, { card: string; dot: string; ring: string; chip: string }> = {
   free: {
-    card: 'border-slate-200 bg-white hover:border-brand-500 hover:shadow-glow dark:border-slate-800 dark:bg-slate-900',
-    dot: 'bg-slate-400',
-    ping: false,
-    live: false
+    card: 'border-ink-200 bg-white hover:border-brand-500/70 dark:border-ink-800 dark:bg-ink-900',
+    dot: 'bg-ink-400',
+    ring: 'text-ink-300 dark:text-ink-700',
+    chip: 'bg-ink-100 text-ink-500 dark:bg-ink-800 dark:text-ink-400'
   },
   occupied: {
-    card: 'border-amber-300 bg-amber-50/70 hover:border-amber-400 dark:border-amber-500/40 dark:bg-amber-500/[0.08] dark:hover:border-amber-400/70',
+    card: 'border-amber-300 bg-amber-50/70 hover:border-amber-400 dark:border-amber-500/40 dark:bg-amber-500/[0.08]',
     dot: 'bg-amber-500',
-    ping: true,
-    live: true
+    ring: 'text-amber-500',
+    chip: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
   },
   reserved: {
-    card: 'border-brand-300 bg-brand-50/60 hover:border-brand-400 dark:border-brand-500/40 dark:bg-brand-500/[0.08] dark:hover:border-brand-400/70',
+    card: 'border-brand-300 bg-brand-50/60 hover:border-brand-400 dark:border-brand-500/40 dark:bg-brand-500/[0.08]',
     dot: 'bg-brand-500',
-    ping: true,
-    live: false
+    ring: 'text-brand-500',
+    chip: 'bg-brand-100 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300'
   },
   cleaning: {
     card: 'border-purple-300 bg-purple-50/60 hover:border-purple-400 dark:border-purple-500/40 dark:bg-purple-500/[0.08]',
     dot: 'bg-purple-500',
-    ping: false,
-    live: false
+    ring: 'text-purple-500',
+    chip: 'bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300'
   }
 }
 
@@ -65,35 +67,118 @@ function durationText(minutes: number): string {
   return `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, '0')}`
 }
 
+const RING_RADIUS = 21
+const RING_LENGTH = 2 * Math.PI * RING_RADIUS
+
+/**
+ * The table's number inside a ring that fills with the time the party has been
+ * seated. It is the only moving part of a card, and it moves because it means
+ * something: a full, pulsing ring is a table that has waited too long.
+ */
+function TableDial({
+  name,
+  status,
+  minutes,
+  seated
+}: {
+  name: string
+  status: TableStatus
+  minutes: number
+  seated: boolean
+}) {
+  const style = STATUS_STYLES[status]
+  const progress = seated ? Math.min(1, minutes / SITTING_FULL_MINUTES) : 0
+  const overdue = seated && minutes >= SITTING_FULL_MINUTES
+  return (
+    <span className={clsx('relative flex h-12 w-12 flex-none items-center justify-center', overdue && 'animate-attention')}>
+      <svg viewBox="0 0 48 48" className="absolute inset-0 -rotate-90" aria-hidden>
+        <circle cx="24" cy="24" r={RING_RADIUS} fill="none" strokeWidth="3" className="stroke-ink-200 dark:stroke-ink-800" />
+        {seated ? (
+          <circle
+            cx="24"
+            cy="24"
+            r={RING_RADIUS}
+            fill="none"
+            strokeWidth="3"
+            strokeLinecap="round"
+            stroke="currentColor"
+            /* The arc grows by redrawing its dash, so nothing in the card reflows. */
+            style={{
+              strokeDasharray: RING_LENGTH,
+              strokeDashoffset: RING_LENGTH * (1 - progress),
+              transition: 'stroke-dashoffset 600ms ease-out'
+            }}
+            className={overdue ? 'text-red-500' : style.ring}
+          />
+        ) : null}
+      </svg>
+      <span className="num text-base font-extrabold text-ink-800 dark:text-ink-100" dir="ltr">
+        {name}
+      </span>
+    </span>
+  )
+}
+
 export default function TablesPage() {
   const { t, language } = useT()
   const navigate = useNavigate()
   const can = useAppStore((state) => state.can)
   const map = useApi(() => api.tables.map(), [])
-  const [, setTick] = useState(0)
-  // Keep the "sitting for N min" timers fresh without re-fetching.
+  const [tick, setTick] = useState(0)
+  /* Keeps the sitting timers and the rings moving without re-fetching. */
   useInterval(() => setTick((value) => value + 1), 30000)
   useAppEvent((event) => {
     if (event.type.startsWith('order') || event.type.startsWith('table')) void map.reload()
   })
 
   const [areaFilter, setAreaFilter] = useState<number | 'all'>('all')
+  const [statusFilter, setStatusFilter] = useState<TableStatus | 'all'>('all')
   const [error, setError] = useState<string | null>(null)
   const [tableModal, setTableModal] = useState<{ open: boolean; table: RestaurantTable | null }>({ open: false, table: null })
   const [areaModal, setAreaModal] = useState(false)
   const [removeTarget, setRemoveTarget] = useState<RestaurantTable | null>(null)
 
   const areas = map.data?.areas ?? []
+  const allTables = map.data?.tables ?? []
   const tables = useMemo(
-    () => (map.data?.tables ?? []).filter((table) => areaFilter === 'all' || table.areaId === areaFilter),
-    [map.data, areaFilter]
+    () =>
+      allTables.filter(
+        (table) =>
+          (areaFilter === 'all' || table.areaId === areaFilter) &&
+          (statusFilter === 'all' || table.status === statusFilter)
+      ),
+    [allTables, areaFilter, statusFilter]
   )
-  const grouped = useMemo(() => {
-    return areas
-      .map((area) => ({ area, tables: tables.filter((table) => table.areaId === area.id) }))
-      .filter((group) => group.tables.length > 0)
-  }, [areas, tables])
+  const grouped = useMemo(
+    () =>
+      areas
+        .map((area) => ({ area, tables: tables.filter((table) => table.areaId === area.id) }))
+        .filter((group) => group.tables.length > 0),
+    [areas, tables]
+  )
 
+  /* What the floor looks like right now, read once for the strip at the top. */
+  const floor = useMemo(() => {
+    const counts: Record<TableStatus, number> = { free: 0, occupied: 0, reserved: 0, cleaning: 0 }
+    let seatedCovers = 0
+    let sittingTotal = 0
+    let sittingCount = 0
+    for (const table of allTables) {
+      const status = table.status as TableStatus
+      if (status in counts) counts[status] += 1
+      if (table.openOrderId) {
+        seatedCovers += table.openOrderCovers ?? table.seats
+        const minutes = sittingMinutes(table.openOrderOpenedAt)
+        if (minutes > 0) {
+          sittingTotal += minutes
+          sittingCount += 1
+        }
+      }
+    }
+    return { counts, seatedCovers, averageSitting: sittingCount ? Math.round(sittingTotal / sittingCount) : 0 }
+  }, [allTables, tick])
+
+  const currency = useAppStore((state) => state.settings?.currency) ?? 'DZD'
   const manage = can('tables.manage')
   const pos = can('pos.use')
 
@@ -132,54 +217,81 @@ export default function TablesPage() {
             </>
           ) : null
         }
-      />
+      >
+        {areas.length > 1 ? (
+          <Tabs<string>
+            value={String(areaFilter)}
+            onChange={(value) => setAreaFilter(value === 'all' ? 'all' : Number(value))}
+            items={[
+              { value: 'all', label: t('common.all'), count: allTables.length },
+              ...areas.map((area) => ({
+                value: String(area.id),
+                label: language === 'ar' ? area.nameAr : area.nameFr,
+                count: allTables.filter((table) => table.areaId === area.id).length
+              }))
+            ]}
+          />
+        ) : null}
+      </PageHeader>
 
-      {error ? <div className="mb-4"><ErrorBox code={error} /></div> : null}
-      {map.error ? <div className="mb-4"><ErrorBox code={map.error} onRetry={() => void map.reload()} /></div> : null}
+      {error ? <div className="mb-3"><ErrorBox code={error} /></div> : null}
+      {map.error ? <div className="mb-3"><ErrorBox code={map.error} onRetry={() => void map.reload()} /></div> : null}
 
-      <div className="mb-4 flex flex-wrap items-center gap-1.5">
-        <button
-          onClick={() => setAreaFilter('all')}
-          className={
-            areaFilter === 'all'
-              ? 'rounded-full bg-brand-800 px-3 py-1 text-xs font-semibold text-white'
-              : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900'
-          }
-        >
-          {t('common.all')}
-        </button>
-        {areas.map((area) => (
-          <button
-            key={area.id}
-            onClick={() => setAreaFilter(area.id)}
-            className={
-              areaFilter === area.id
-                ? 'rounded-full bg-brand-800 px-3 py-1 text-xs font-semibold text-white'
-                : 'rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-900'
-            }
-          >
-            <span className="me-1 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: area.color }} />
-            {language === 'ar' ? area.nameAr : area.nameFr}
-          </button>
-        ))}
-        <div className="ms-auto flex items-center gap-3 text-[11px] text-slate-400">
-          {(['free', 'occupied', 'reserved', 'cleaning'] as TableStatus[]).map((status) => (
-            <span key={status} className="flex items-center gap-1">
-              <span className={`h-2 w-2 rounded-full ${STATUS_STYLES[status].dot}`} />
-              {tableStatusLabel(language, status)}
+      {/* The floor at a glance. Each state is also the filter for it, so the
+          legend and the filter are the same control instead of two. */}
+      <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+        {(['free', 'occupied', 'reserved', 'cleaning'] as TableStatus[]).map((status) => {
+          const active = statusFilter === status
+          const style = STATUS_STYLES[status]
+          return (
+            <button
+              key={status}
+              type="button"
+              aria-pressed={active}
+              onClick={() => setStatusFilter(active ? 'all' : status)}
+              className={clsx(
+                'flex items-center gap-2.5 rounded-xl border px-3 py-2 text-start transition-all duration-200 active:scale-[0.97]',
+                active
+                  ? 'border-brand-500 bg-brand-50 dark:border-brand-500/60 dark:bg-brand-500/10'
+                  : 'border-ink-200 bg-white hover:border-ink-300 dark:border-ink-800 dark:bg-ink-900 dark:hover:border-ink-700'
+              )}
+            >
+              <span className={clsx('h-2.5 w-2.5 flex-none rounded-full', style.dot)} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[11px] text-ink-500">{tableStatusLabel(language, status)}</span>
+                <span className="num block text-lg font-bold leading-tight text-ink-800 dark:text-ink-100">
+                  {floor.counts[status]}
+                </span>
+              </span>
+            </button>
+          )
+        })}
+        <div className="flex items-center gap-2.5 rounded-xl border border-ink-200 bg-white px-3 py-2 dark:border-ink-800 dark:bg-ink-900">
+          <Users className="h-4 w-4 flex-none text-ink-400" />
+          <span className="min-w-0">
+            <span className="block truncate text-[11px] text-ink-500">{t('tables.seated')}</span>
+            <span className="num block text-lg font-bold leading-tight text-ink-800 dark:text-ink-100">{floor.seatedCovers}</span>
+          </span>
+        </div>
+        <div className="flex items-center gap-2.5 rounded-xl border border-ink-200 bg-white px-3 py-2 dark:border-ink-800 dark:bg-ink-900">
+          <Timer className="h-4 w-4 flex-none text-ink-400" />
+          <span className="min-w-0">
+            <span className="block truncate text-[11px] text-ink-500">{t('tables.avgSitting')}</span>
+            <span className="num block text-lg font-bold leading-tight text-ink-800 dark:text-ink-100" dir="ltr">
+              {floor.averageSitting ? durationText(floor.averageSitting) : '—'}
             </span>
-          ))}
+          </span>
         </div>
       </div>
 
       {map.loading && !map.data ? (
         <Loading />
-      ) : grouped.length === 0 ? (
+      ) : allTables.length === 0 ? (
         <Card>
           <EmptyState
             icon={UtensilsCrossed}
-            title={language === 'ar' ? 'لا توجد طاولات بعد' : 'Aucune table pour le moment'}
-            hint={language === 'ar' ? 'أضف منطقة ثم طاولات لبدء استقبال الطلبات.' : 'Ajoutez une zone puis des tables pour démarrer.'}
+            title={t('tables.empty')}
+            hint={t('tables.emptyHint')}
             action={
               manage ? (
                 <Button icon={Plus} onClick={() => setAreaModal(true)}>
@@ -189,135 +301,143 @@ export default function TablesPage() {
             }
           />
         </Card>
+      ) : grouped.length === 0 ? (
+        <Card>
+          <EmptyState icon={Sparkles} title={t('tables.noneWithStatus')} />
+        </Card>
       ) : (
-        <div className="space-y-6">
+        /* Keyed on the filter so the cards re-enter in sequence when it changes:
+           the new selection reads as a fresh set, not a silent swap. */
+        <div key={`${areaFilter}-${statusFilter}`} className="space-y-5">
           {grouped.map(({ area, tables: areaTables }) => (
             <section key={area.id}>
               <div className="mb-2 flex items-center gap-2">
                 <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: area.color }} />
-                <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                <h2 className="text-sm font-bold text-ink-800 dark:text-ink-100">
                   {language === 'ar' ? area.nameAr : area.nameFr}
                 </h2>
-                <span className="text-[11px] text-slate-400">{areaTables.length}</span>
+                <span className="num text-[11px] text-ink-400">{areaTables.length}</span>
               </div>
-              <div className="fit-grid-sm grid gap-3">
+              <div className="fit-grid grid gap-3">
                 {areaTables.map((table, index) => {
-                  const style = STATUS_STYLES[table.status as TableStatus]
+                  const status = table.status as TableStatus
+                  const style = STATUS_STYLES[status]
+                  const seated = Boolean(table.openOrderId)
+                  const minutes = seated ? sittingMinutes(table.openOrderOpenedAt) : 0
+                  const overdue = seated && minutes >= SITTING_FULL_MINUTES
+                  const clickable = seated || (pos && manage)
                   return (
-                  <div
-                    key={table.id}
-                    style={{ animationDelay: `${Math.min(index * 45, 400)}ms` }}
-                    className={`group relative animate-table-pop rounded-xl border p-3 transition-all duration-200 will-change-transform hover:-translate-y-0.5 ${style.card} ${table.openOrderId || (pos && manage) ? 'cursor-pointer' : ''}`}
-                    onClick={() => openTable(table)}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-start gap-2">
-                        <span className="relative mt-1.5 flex h-2 w-2 shrink-0">
-                          {style.ping ? (
-                            <span className={`absolute inline-flex h-full w-full animate-status-ping rounded-full ${style.dot}`} />
-                          ) : null}
-                          <span className={`relative inline-flex h-2 w-2 rounded-full ${style.dot}`} />
-                        </span>
-                        <div>
-                          <p className="text-base font-bold text-slate-800 dark:text-slate-100">{table.name}</p>
-                          <p className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-400">
+                    <div
+                      key={table.id}
+                      /* 35 ms apart: the room fills in rather than snapping into place. */
+                      style={{ animationDelay: `${Math.min(index * 35, 350)}ms` }}
+                      className={clsx(
+                        'group relative animate-seat-in rounded-xl border p-3 transition-[border-color,background-color,transform,box-shadow] duration-200',
+                        style.card,
+                        clickable && 'cursor-pointer hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 active:scale-[0.98]'
+                      )}
+                      onClick={() => openTable(table)}
+                      title={overdue ? t('tables.longSittingHint') : undefined}
+                    >
+                      <div className="flex items-start gap-3">
+                        <TableDial name={table.name} status={status} minutes={minutes} seated={seated} />
+                        <div className="min-w-0 flex-1">
+                          <span className={clsx('inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold', style.chip)}>
+                            {tableStatusLabel(language, status)}
+                          </span>
+                          <p className="mt-1 flex items-center gap-1 text-[11px] text-ink-400">
                             <Users className="h-3 w-3" />
-                            {table.seats} {t('tables.seats')}
+                            {seated ? (table.openOrderCovers ?? table.seats) : table.seats} / {table.seats}
                           </p>
                         </div>
                       </div>
-                      <Badge tone={tableStatusTone(table.status)}>{tableStatusLabel(language, table.status)}</Badge>
-                    </div>
 
-                    {table.openOrderId ? (
-                      <div className="mt-3 rounded-lg bg-white/70 px-2 py-1.5 text-[11px] dark:bg-slate-950/40">
-                        <div className="flex items-center justify-between font-semibold text-slate-700 dark:text-slate-200">
-                          <span className="num" dir="ltr">{table.openOrderNumber}</span>
-                          <span className="num text-amber-600 dark:text-amber-400" dir="ltr">{table.openOrderTotalCents / 100} DZD</span>
+                      {seated ? (
+                        <div className="mt-2.5 rounded-lg bg-white/70 px-2 py-1.5 text-[11px] dark:bg-ink-950/40">
+                          <div className="flex items-center justify-between font-semibold text-ink-700 dark:text-ink-200">
+                            <span className="num" dir="ltr">{table.openOrderNumber}</span>
+                            <span className="num" dir="ltr">{formatMoney(table.openOrderTotalCents, currency, 0)}</span>
+                          </div>
+                          <div className="mt-0.5 flex items-center gap-2 text-ink-500">
+                            <span className={clsx('inline-flex items-center gap-0.5 font-semibold', overdue && 'text-red-600 dark:text-red-400')}>
+                              <Clock className="h-3 w-3" />
+                              <span className="num" dir="ltr">{durationText(minutes)}</span>
+                            </span>
+                            {overdue ? <span className="text-[10px] font-bold text-red-600 dark:text-red-400">{t('tables.longSitting')}</span> : null}
+                            <span className="ms-auto truncate">{table.waiterName ?? '—'}</span>
+                          </div>
                         </div>
-                        <div className="mt-0.5 flex items-center gap-2 text-slate-500">
-                          <span className="inline-flex items-center gap-0.5">
-                            <Users className="h-3 w-3" />
-                            {table.openOrderCovers ?? table.seats}
+                      ) : null}
+
+                      <div className="mt-2 flex items-center gap-1">
+                        {seated ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-brand-700 transition-transform duration-200 group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5 dark:text-brand-300">
+                            {t('tables.openOnIt')}
+                            <ArrowRight className="h-3 w-3 rtl:rotate-180" />
                           </span>
-                          <span className="inline-flex items-center gap-0.5">
-                            <Clock className="h-3 w-3" />
-                            {durationText(sittingMinutes(table.openOrderOpenedAt))}
+                        ) : pos && manage ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-ink-500">
+                            <Plus className="h-3 w-3" />
+                            {t('tables.openOrder')}
                           </span>
-                          <span className="ms-auto truncate">{table.waiterName ?? '—'}</span>
-                        </div>
+                        ) : null}
                       </div>
-                    ) : (
-                      <p className="mt-3 text-[11px] text-slate-400">
-                        {table.status === 'cleaning' ? t('tables.markCleaning') : table.status === 'reserved' ? t('tables.reserved') : t('tables.free')}
-                      </p>
-                    )}
 
-                    <div className="mt-2 flex items-center gap-1">
-                      {table.openOrderId ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-brand-700 dark:text-brand-300">
-                          {t('tables.openOnIt')}
-                          <ArrowRight className="h-3 w-3 rtl:rotate-180" />
-                        </span>
-                      ) : pos && manage ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500">
-                          <Plus className="h-3 w-3" />
-                          {t('tables.openOrder')}
-                        </span>
+                      {manage ? (
+                        <div className="absolute -top-2 end-1 hidden items-center gap-1 rounded-lg border border-ink-200 bg-white p-0.5 shadow-sm group-hover:flex dark:border-ink-700 dark:bg-ink-800">
+                          <button
+                            className="rounded p-1 text-ink-500 transition-colors hover:bg-ink-100 dark:hover:bg-ink-700"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              setTableModal({ open: true, table })
+                            }}
+                            title={t('common.edit')}
+                            aria-label={t('common.edit')}
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                          {!seated && status !== 'free' ? (
+                            <button
+                              className="rounded p-1 text-brand-600 transition-colors hover:bg-brand-50 dark:hover:bg-brand-500/15"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                void setStatus(table, 'free')
+                              }}
+                              title={t('tables.markFree')}
+                              aria-label={t('tables.markFree')}
+                            >
+                              <UtensilsCrossed className="h-3 w-3" />
+                            </button>
+                          ) : null}
+                          {!seated && status === 'occupied' ? (
+                            <button
+                              className="rounded p-1 text-purple-600 transition-colors hover:bg-purple-50 dark:hover:bg-purple-500/15"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                void setStatus(table, 'cleaning')
+                              }}
+                              title={t('tables.markCleaning')}
+                              aria-label={t('tables.markCleaning')}
+                            >
+                              <Settings className="h-3 w-3" />
+                            </button>
+                          ) : null}
+                          {!seated ? (
+                            <button
+                              className="rounded p-1 text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-500/15"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                setRemoveTarget(table)
+                              }}
+                              title={t('common.delete')}
+                              aria-label={t('common.delete')}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          ) : null}
+                        </div>
                       ) : null}
                     </div>
-
-                    {manage ? (
-                      <div className="absolute -top-2 end-1 hidden items-center gap-1 rounded-lg border border-slate-200 bg-white p-0.5 shadow-sm group-hover:flex dark:border-slate-700 dark:bg-slate-800">
-                        <button
-                          className="rounded p-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            setTableModal({ open: true, table })
-                          }}
-                          title={t('common.edit')}
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </button>
-                        {!table.openOrderId && table.status !== 'free' ? (
-                          <button
-                            className="rounded p-1 text-brand-600 hover:bg-brand-50"
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              void setStatus(table, 'free')
-                            }}
-                            title={t('tables.markFree')}
-                          >
-                            <UtensilsCrossed className="h-3 w-3" />
-                          </button>
-                        ) : null}
-                        {!table.openOrderId && table.status === 'occupied' ? (
-                          <button
-                            className="rounded p-1 text-purple-600 hover:bg-purple-50"
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              void setStatus(table, 'cleaning')
-                            }}
-                            title={t('tables.markCleaning')}
-                          >
-                            <Settings className="h-3 w-3" />
-                          </button>
-                        ) : null}
-                        {!table.openOrderId ? (
-                          <button
-                            className="rounded p-1 text-red-500 hover:bg-red-50"
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              setRemoveTarget(table)
-                            }}
-                            title={t('common.delete')}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
                   )
                 })}
               </div>
@@ -325,8 +445,6 @@ export default function TablesPage() {
           ))}
         </div>
       )}
-
-      <p className="mt-4 text-[11px] text-slate-400">{formatDate(new Date())} · {formatTime(new Date())}</p>
 
       <TableModal
         open={tableModal.open}

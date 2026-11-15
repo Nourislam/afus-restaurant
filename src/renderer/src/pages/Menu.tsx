@@ -385,7 +385,7 @@ function ProductModal({
     sortOrder: String(product?.sortOrder ?? 0)
   })
   const [variants, setVariants] = useState<ProductVariant[]>(product?.variants ?? [])
-  const [modifierGroupIds, setModifierGroupIds] = useState<number[]>(product?.modifierGroups.map((group) => group.id) ?? [])
+  const [modifierGroupIds, setModifierGroupIds] = useState<number[]>(product?.modifierGroups?.map((group) => group.id) ?? [])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 

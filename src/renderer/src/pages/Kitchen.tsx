@@ -124,10 +124,10 @@ export default function KitchenPage() {
           </button>
         ))}
         <div className="ms-auto flex items-center gap-2 text-[11px] text-slate-400">
-          <Badge tone="blue">{board.data?.counts.new ?? 0} {t('kitchen.newOrders')}</Badge>
-          <Badge tone="amber">{board.data?.counts.preparing ?? 0} {t('kitchen.inProgress')}</Badge>
-          <Badge tone="brand">{board.data?.counts.ready ?? 0} {t('kitchen.readyOrders')}</Badge>
-          {board.data && board.data.counts.late > 0 ? <Badge tone="red">{board.data.counts.late} {t('kitchen.late')}</Badge> : null}
+          <Badge tone="blue">{board.data?.counts?.new ?? 0} {t('kitchen.newOrders')}</Badge>
+          <Badge tone="amber">{board.data?.counts?.preparing ?? 0} {t('kitchen.inProgress')}</Badge>
+          <Badge tone="brand">{board.data?.counts?.ready ?? 0} {t('kitchen.readyOrders')}</Badge>
+          {(board.data?.counts?.late ?? 0) > 0 ? <Badge tone="red">{board.data?.counts?.late} {t('kitchen.late')}</Badge> : null}
           {board.loading ? <Spinner size="sm" /> : null}
         </div>
       </div>
@@ -151,11 +151,14 @@ export default function KitchenPage() {
                   {t('common.noData')}
                 </p>
               ) : (
-                columns[column.key].map((ticket) => {
+                columns[column.key].map((ticket, index) => {
                   const minutes = Math.max(ticket.elapsedMinutes, elapsedMinutes(ticket.createdAt))
                   const late = minutes >= (settings?.kitchenAlertMinutes ?? 15)
                   return (
-                    <Card key={ticket.orderId} className={`animate-scale-in overflow-hidden transition-shadow ${late ? 'ring-1 ring-red-400 shadow-glow' : ''}`}>
+                    /* Tickets arrive in sequence, and a late one keeps asking:
+                       the only two things that move on this board. */
+                    <div key={ticket.orderId} style={{ animationDelay: `${Math.min(index * 35, 280)}ms` }} className="animate-seat-in">
+                    <Card className={`overflow-hidden transition-shadow duration-200 ${late ? 'animate-attention ring-1 ring-red-400 shadow-glow' : ''}`}>
                       <div className={`flex items-start justify-between gap-2 px-3 py-2 ${late ? 'bg-red-50 dark:bg-red-950/30' : 'bg-slate-50 dark:bg-slate-800/50'}`}>
                         <div>
                           <p className="text-sm font-bold text-slate-900 dark:text-white">{ticket.orderNumber}</p>
@@ -218,6 +221,7 @@ export default function KitchenPage() {
                         </div>
                       </div>
                     </Card>
+                    </div>
                   )
                 })
               )}

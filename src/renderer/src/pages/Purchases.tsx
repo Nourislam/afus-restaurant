@@ -311,7 +311,7 @@ function InvoiceModal({
   const [extra, setExtra] = useState(centsToInput(purchase?.extraCents ?? 0))
   const [note, setNote] = useState(purchase?.note ?? '')
   const [items, setItems] = useState<{ ingredientId: string; qty: string; unitCost: string }[]>(
-    purchase?.items.map((item) => ({
+    purchase?.items?.map((item) => ({
       ingredientId: String(item.ingredientId),
       qty: String(item.qty),
       unitCost: centsToInput(item.unitCostCents)

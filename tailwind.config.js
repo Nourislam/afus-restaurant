@@ -97,7 +97,10 @@ export default {
         'table-pop': 'tablePop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both',
         'status-ping': 'statusPing 1.8s cubic-bezier(0, 0, 0.2, 1) infinite',
         float: 'float 4s ease-in-out infinite',
-        shimmer: 'shimmer 1.6s linear infinite'
+        shimmer: 'shimmer 1.6s linear infinite',
+        /* The floor plan: a seat filling, and a table that has waited too long. */
+        'seat-in': 'seatIn 0.34s cubic-bezier(0.34, 1.4, 0.64, 1) both',
+        'attention': 'attention 2.4s ease-in-out infinite'
       },
       keyframes: {
         fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
@@ -128,6 +131,14 @@ export default {
         shimmer: {
           '0%': { backgroundPosition: '-200% 0' },
           '100%': { backgroundPosition: '200% 0' }
+        },
+        seatIn: {
+          '0%': { opacity: '0', transform: 'scale(0.92) translateY(10px)' },
+          '100%': { opacity: '1', transform: 'scale(1) translateY(0)' }
+        },
+        attention: {
+          '0%, 100%': { transform: 'scale(1)', opacity: '1' },
+          '50%': { transform: 'scale(1.06)', opacity: '0.85' }
         }
       }
     }

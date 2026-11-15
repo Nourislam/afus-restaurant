@@ -15,7 +15,7 @@ export default function Customers() {
 
   return (
     <section className="space-y-4">
-      <PageHeader title={t('nav.customers')} subtitle={t('nav.customers')} />
+      <PageHeader title={t('nav.customers')} subtitle={t('customers.subtitle')} />
       <Card className="p-3">
         <div className="w-64">
           <SearchInput value={search} onChange={setSearch} />
