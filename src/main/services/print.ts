@@ -57,12 +57,12 @@ export async function printHtml(input: {
   }
 }
 
-export async function exportPdf(input: { html: string }): Promise<{ filePath: string | null }> {
+export async function exportPdf(input: { html: string; fileName?: string }): Promise<{ filePath: string | null }> {
   let win: BrowserWindow | null = null
   try {
     win = await render(input.html)
     const data = await win.webContents.printToPDF({ printBackground: true })
-    const filePath = join(appPaths().reports, `ticket-${nowStamp().replace(/[: ]/g, '-')}.pdf`)
+    const filePath = join(appPaths().reports, input.fileName ?? `ticket-${nowStamp().replace(/[: ]/g, '-')}.pdf`)
     writeFileSync(filePath, data)
     return { filePath }
   } catch {

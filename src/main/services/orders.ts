@@ -5,12 +5,14 @@
  */
 import type { Order, OrderItem, OrderSummary } from '@shared/types'
 import { dbAll, dbGet, dbWrite, transaction } from '../db/client'
-import { requireSession } from '../security/session'
+import { currentUserId, requireSession } from '../security/session'
 import { getSettings } from './settings'
 import { AppError } from '../utils/errors'
 import { nowStamp } from '../utils/dates'
 import { writeAudit } from './audit'
 import { computeStamp, sealOrder } from './fiscal'
+import { consumeStockForOrder, restoreStockForOrder } from './inventory'
+import { postCashMovement } from './finance'
 
 interface CreateItemInput {
   productId: number
@@ -388,6 +390,7 @@ export function payOrder(input: {
         'INSERT INTO order_payments (orderId, method, amountCents, reference, userId, createdAt) VALUES (?, ?, ?, ?, ?, ?)',
         [input.orderId, p.method, Math.floor(p.amountCents), p.reference ?? null, session.userId, nowStamp()]
       )
+      if (p.method === 'cash') postCashMovement({ type: 'sale', amountCents: Math.floor(p.amountCents), refType: 'order', refId: input.orderId, userId: session.userId })
     }
     /* Stamp duty applies to the cash part of the sale itself (never to the stamp already owed);
        recompute then folds it into the total as its own line. */
@@ -418,6 +421,8 @@ export function payOrder(input: {
         [input.orderId]
       )
       setTableStatus((order as { tableId: number | null }).tableId, 'free')
+      /* Recipes consume their ingredients the moment the sale is final. */
+      consumeStockForOrder(input.orderId, session.userId)
       /* Seal the sale: sequential fiscal number + chained hash. */
       sealOrder(input.orderId)
     }
@@ -437,8 +442,9 @@ export function cancelOrder(input: { orderId: number; reason: string; stockPolic
       input.orderId
     ])
     setTableStatus((order as { tableId: number | null }).tableId, 'free')
+    if (input.stockPolicy === 'restore') restoreStockForOrder(input.orderId, currentUserId())
   })
-  writeAudit('orders.cancel', 'order', input.orderId, { reason: input.reason })
+  writeAudit('orders.cancel', 'order', input.orderId, { reason: input.reason, stockPolicy: input.stockPolicy ?? null })
   return buildOrder(input.orderId)
 }
 

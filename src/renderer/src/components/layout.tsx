@@ -2,11 +2,20 @@ import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { clsx } from 'clsx'
 import {
+  BarChart3,
+  Bike,
   BookOpen,
+  CalendarClock,
+  ChefHat,
   ChevronDown,
   Flame,
   Globe,
   LayoutDashboard,
+  Lightbulb,
+  Package,
+  Truck,
+  Users,
+  Wallet,
   LogOut,
   Menu as MenuIcon,
   Moon,
@@ -78,12 +87,23 @@ export function AppShell() {
     { to: '/pos', label: t('nav.pos'), icon: ShoppingCart, permission: 'pos.use' },
     { to: '/tables', label: t('nav.tables'), icon: UtensilsCrossed, permission: ['tables.manage', 'pos.use'] },
     { to: '/kitchen', label: t('nav.kitchen'), icon: Flame, permission: 'kitchen.view' },
-    { to: '/orders', label: t('nav.orders'), icon: ReceiptText, permission: 'orders.view' }
+    { to: '/orders', label: t('nav.orders'), icon: ReceiptText, permission: 'orders.view' },
+    { to: '/reservations', label: t('nav.reservations'), icon: CalendarClock, permission: 'reservations.manage' },
+    { to: '/delivery', label: t('nav.delivery'), icon: Bike, permission: 'delivery.manage' }
   ]
   const management: NavItem[] = [
     { to: '/menu', label: t('nav.menu'), icon: BookOpen, permission: 'menu.view' },
+    { to: '/recipes', label: t('nav.recipes'), icon: ChefHat, permission: 'recipes.view' },
+    { to: '/inventory', label: t('nav.inventory'), icon: Package, permission: 'inventory.view' },
+    { to: '/purchases', label: t('nav.purchases'), icon: Truck, permission: 'purchases.view' },
+    { to: '/customers', label: t('nav.customers'), icon: Users, permission: 'customers.manage' },
     { to: '/website', label: t('web.nav'), icon: Globe, permission: 'settings.manage' },
     { to: '/employees', label: t('nav.employees'), icon: ShieldCheck, permission: 'employees.manage' }
+  ]
+  const insights: NavItem[] = [
+    { to: '/finance', label: t('nav.finance'), icon: Wallet, permission: 'finance.view' },
+    { to: '/reports', label: t('nav.reports'), icon: BarChart3, permission: 'reports.view' },
+    { to: '/insight', label: t('nav.insight'), icon: Lightbulb, permission: 'insight.view' }
   ]
   const system: NavItem[] = [
     { to: '/settings', label: t('nav.settings'), icon: SettingsIcon, permission: 'settings.manage' }
@@ -178,6 +198,7 @@ export function AppShell() {
         <div className="flex-1 px-2 pb-4">
           {renderSection(t('nav.operations'), operations)}
           {simpleMode ? null : renderSection(t('nav.management'), management)}
+          {simpleMode ? null : renderSection(t('nav.insights'), insights)}
           {simpleMode ? null : renderSection(t('nav.settings'), system)}
         </div>
 

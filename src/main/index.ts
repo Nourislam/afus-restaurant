@@ -5,6 +5,7 @@ import { seedCoreData } from './db/seed'
 import { appPaths, ensureDirectories } from './paths'
 import { registerIpcHandlers } from './ipc'
 import { autostartWebsite } from './services/website'
+import { autoBackup } from './services/backup'
 import { writeAudit } from './services/audit'
 
 /* Restaurant and office machines vary a lot, and some GPU drivers flood the
@@ -63,6 +64,11 @@ async function bootstrap(): Promise<void> {
   const paths = appPaths()
   ensureDirectories(paths)
   await openDatabase(paths.database)
+  try {
+    autoBackup()
+  } catch (error) {
+    console.warn('[afus] auto backup skipped:', error)
+  }
   seedCoreData()
   const { implemented, pending } = registerIpcHandlers()
   console.info(`[afus] ${implemented} channels ready, ${pending.length} pending: ${pending.slice(0, 6).join(', ')}…`)

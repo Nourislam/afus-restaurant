@@ -17,6 +17,15 @@ import Kitchen from './pages/Kitchen'
 import Orders from './pages/Orders'
 import OrderDetail from './pages/OrderDetail'
 import Website from './pages/Website'
+import Customers from './pages/Customers'
+import Inventory from './pages/Inventory'
+import Recipes from './pages/Recipes'
+import Purchases from './pages/Purchases'
+import Reservations from './pages/Reservations'
+import Delivery from './pages/Delivery'
+import Finance from './pages/Finance'
+import Reports from './pages/Reports'
+import Insight from './pages/Insight'
 
 type Phase = 'loading' | 'setup' | 'login' | 'ready' | 'error'
 
@@ -97,7 +106,16 @@ export default function App() {
           <Route path="/kitchen" element={<Kitchen />} />
           <Route path="/orders" element={<Orders />} />
           <Route path="/orders/:id" element={<OrderDetail />} />
+          <Route path="/reservations" element={<Reservations />} />
+          <Route path="/delivery" element={<Delivery />} />
           <Route path="/menu" element={<Menu />} />
+          <Route path="/recipes" element={<Recipes />} />
+          <Route path="/inventory" element={<Inventory />} />
+          <Route path="/purchases" element={<Purchases />} />
+          <Route path="/customers" element={<Customers />} />
+          <Route path="/finance" element={<Finance />} />
+          <Route path="/reports" element={<Reports />} />
+          <Route path="/insight" element={<Insight />} />
           <Route path="/website" element={<Website />} />
           <Route path="/employees" element={<Employees />} />
           <Route path="/settings" element={<Settings />} />

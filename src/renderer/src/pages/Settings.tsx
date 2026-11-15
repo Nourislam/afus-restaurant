@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import { CalendarCheck, Download, FileCheck2, Printer, Save, ShieldCheck } from 'lucide-react'
-import type { AppSettings, FiscalClosure, IntegrityReport, StampBracket } from '@shared/types'
+import { CalendarCheck, DatabaseBackup, Download, FileCheck2, FolderOpen, Printer, RotateCcw, Save, ShieldCheck, Trash2 } from 'lucide-react'
+import type { AppSettings, BackupFile, FiscalClosure, IntegrityReport, StampBracket } from '@shared/types'
 import { PAYMENT_METHOD_LABELS } from '@shared/constants'
 import { api } from '../lib/api'
 import { formatDateTime, formatMoney } from '../lib/format'
 import { useT } from '../i18n'
 import { useAppStore } from '../store/app'
-import { Badge, Button, Card, ErrorBox, Field, Input, PageHeader, Select, Spinner, Toggle } from '../components/ui'
+import { Badge, Button, Card, Confirm, ErrorBox, Field, Input, PageHeader, Select, Spinner, Toggle } from '../components/ui'
 
 const todayKey = () => new Date().toISOString().slice(0, 10)
 const daToCents = (value: string) => Math.max(0, Math.round(Number(value || '0') * 100))
@@ -30,13 +30,35 @@ export default function Settings() {
   const [exported, setExported] = useState<{ dir: string; count: number } | null>(null)
   const [fiscalBusy, setFiscalBusy] = useState<string | null>(null)
 
+  // Backups
+  const [backups, setBackups] = useState<BackupFile[]>([])
+  const [backupName, setBackupName] = useState('')
+  const [backupBusy, setBackupBusy] = useState<string | null>(null)
+  const [restoreTarget, setRestoreTarget] = useState<BackupFile | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<BackupFile | null>(null)
+  const [restored, setRestored] = useState(false)
+
   useEffect(() => {
     if (!form && settings) setForm(settings)
   }, [form, settings])
 
   useEffect(() => {
     api.fiscal.closures().then(setClosures).catch(() => setClosures([]))
+    api.backup.list().then(setBackups).catch(() => setBackups([]))
   }, [])
+
+  const runBackup = async (key: string, action: () => Promise<void>) => {
+    setBackupBusy(key)
+    setError(null)
+    try {
+      await action()
+      setBackups(await api.backup.list())
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'INTERNAL')
+    } finally {
+      setBackupBusy(null)
+    }
+  }
 
   const patch = (values: Partial<AppSettings>) => setForm((current) => (current ? { ...current, ...values } : current))
 
@@ -443,6 +465,90 @@ export default function Settings() {
           </div>
         </Card>
       </div>
+
+      <Card className="space-y-4 p-5">
+        <div>
+          <h2 className="flex items-center gap-2 text-sm font-bold text-ink-800 dark:text-ink-100">
+            <DatabaseBackup className="h-4 w-4 text-brand-700" aria-hidden />
+            {t('backup.title')}
+          </h2>
+          <p className="mt-1 text-xs text-ink-500">{t('backup.hint')}</p>
+        </div>
+        {restored ? (
+          <p className="rounded-lg border border-accent-200 bg-accent-50 px-3 py-2 text-xs font-semibold text-accent-700 dark:border-accent-700/40 dark:bg-accent-500/10 dark:text-accent-300">{t('backup.restored')}</p>
+        ) : null}
+        <div className="flex flex-wrap items-end gap-2">
+          <Field label={t('backup.name')} className="min-w-[220px] flex-1">
+            <Input value={backupName} onChange={(event) => setBackupName(event.target.value)} placeholder={form.restaurantName} />
+          </Field>
+          <Button
+            icon={DatabaseBackup}
+            loading={backupBusy === 'create'}
+            onClick={() =>
+              void runBackup('create', async () => {
+                await api.backup.create(backupName.trim() || form.restaurantName || 'backup')
+                setBackupName('')
+              })
+            }
+          >
+            {t('backup.create')}
+          </Button>
+        </div>
+        {backups.length ? (
+          <ul className="divide-y divide-ink-100 text-xs dark:divide-ink-800">
+            {backups.slice(0, 12).map((backup) => (
+              <li key={backup.name} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-semibold text-ink-800 dark:text-ink-100" dir="ltr">{backup.name}</span>
+                  <span className="text-ink-500" dir="ltr">{formatDateTime(backup.createdAt)} · {(backup.sizeBytes / 1024).toFixed(0)} KB</span>
+                </span>
+                <Badge tone={backup.kind === 'manual' ? 'brand' : backup.kind === 'auto' ? 'neutral' : 'warning'}>{t(`backup.kind.${backup.kind}`)}</Badge>
+                <span className="flex gap-1">
+                  <Button variant="ghost" size="sm" icon={FolderOpen} onClick={() => void api.backup.reveal(backup.path)}>{t('backup.reveal')}</Button>
+                  <Button variant="secondary" size="sm" icon={RotateCcw} onClick={() => setRestoreTarget(backup)}>{t('backup.restore')}</Button>
+                  <Button variant="ghost" size="sm" icon={Trash2} onClick={() => setDeleteTarget(backup)} aria-label={t('common.delete')} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-ink-400">{t('common.noData')}</p>
+        )}
+      </Card>
+
+      <Confirm
+        open={Boolean(restoreTarget)}
+        title={t('backup.restore')}
+        message={`${restoreTarget?.name ?? ''}\n${t('backup.restoreConfirm')}`}
+        confirmLabel={t('backup.restore')}
+        danger
+        loading={backupBusy === 'restore'}
+        onClose={() => setRestoreTarget(null)}
+        onConfirm={() =>
+          void runBackup('restore', async () => {
+            if (!restoreTarget) return
+            await api.backup.restore(restoreTarget.name)
+            setRestoreTarget(null)
+            setRestored(true)
+          })
+        }
+      />
+      <Confirm
+        open={Boolean(deleteTarget)}
+        title={t('common.delete')}
+        message={`${deleteTarget?.name ?? ''} — ${t('common.confirmDelete')}`}
+        confirmLabel={t('common.delete')}
+        danger
+        loading={backupBusy === 'delete'}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() =>
+          void runBackup('delete', async () => {
+            if (!deleteTarget) return
+            await api.backup.delete(deleteTarget.name)
+            setDeleteTarget(null)
+          })
+        }
+      />
 
       <p className="text-[11px] text-ink-400">{t('setup.localOnly')}</p>
     </section>
