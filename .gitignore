@@ -18,3 +18,4 @@ npm-debug.log*
 # stray sql.js artifact (accidental ":memory:" path) and tool dirs
 :memory:
 .freebuff/
+.vitest/

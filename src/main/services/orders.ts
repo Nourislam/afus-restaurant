@@ -10,6 +10,7 @@ import { getSettings } from './settings'
 import { AppError } from '../utils/errors'
 import { nowStamp } from '../utils/dates'
 import { writeAudit } from './audit'
+import { computeStamp, sealOrder } from './fiscal'
 
 interface CreateItemInput {
   productId: number
@@ -126,8 +127,8 @@ function recompute(orderId: number): void {
       "SELECT COALESCE(SUM(lineTotalCents), 0) AS total FROM order_items WHERE orderId = ? AND status != 'removed'",
       [orderId]
     )?.total ?? 0
-  const order = dbGet<{ discountCents: number; deliveryFeeCents: number; paidCents: number }>(
-    'SELECT discountCents, deliveryFeeCents, paidCents FROM orders WHERE id = ?',
+  const order = dbGet<{ discountCents: number; deliveryFeeCents: number; paidCents: number; stampCents: number }>(
+    'SELECT discountCents, deliveryFeeCents, paidCents, stampCents FROM orders WHERE id = ?',
     [orderId]
   )
   if (!order) return
@@ -141,7 +142,8 @@ function recompute(orderId: number): void {
       : Math.round((taxable * rate) / 10000)
   }
   const addedTax = settings.taxInclusive ? 0 : taxCents
-  const totalCents = taxable + addedTax + order.deliveryFeeCents
+  /* The stamp duty on cash is owed by the customer and appears as its own line. */
+  const totalCents = taxable + addedTax + order.deliveryFeeCents + (order.stampCents ?? 0)
   const dueCents = Math.max(0, totalCents - order.paidCents)
   dbWrite(
     'UPDATE orders SET subtotalCents = ?, taxCents = ?, totalCents = ?, dueCents = ?, updatedAt = ? WHERE id = ?',
@@ -387,11 +389,21 @@ export function payOrder(input: {
         [input.orderId, p.method, Math.floor(p.amountCents), p.reference ?? null, session.userId, nowStamp()]
       )
     }
+    /* Stamp duty applies to the cash part of the sale itself (never to the stamp already owed);
+       recompute then folds it into the total as its own line. */
+    const cashCents =
+      dbGet<{ total: number }>("SELECT COALESCE(SUM(amountCents), 0) AS total FROM order_payments WHERE orderId = ? AND method = 'cash'", [
+        input.orderId
+      ])?.total ?? 0
+    const money = dbGet<{ totalCents: number; stampCents: number }>('SELECT totalCents, stampCents FROM orders WHERE id = ?', [input.orderId])
+    const saleCents = Math.max(0, (money?.totalCents ?? 0) - (money?.stampCents ?? 0))
+    dbWrite('UPDATE orders SET stampCents = ? WHERE id = ?', [computeStamp(Math.min(cashCents, saleCents)), input.orderId])
+    recompute(input.orderId)
     const paidCents =
       dbGet<{ total: number }>('SELECT COALESCE(SUM(amountCents), 0) AS total FROM order_payments WHERE orderId = ?', [
         input.orderId
       ])?.total ?? 0
-    const totalCents = Number((order as { totalCents: number }).totalCents)
+    const totalCents = dbGet<{ totalCents: number }>('SELECT totalCents FROM orders WHERE id = ?', [input.orderId])?.totalCents ?? 0
     dbWrite('UPDATE orders SET paidCents = ?, dueCents = ?, updatedAt = ? WHERE id = ?', [
       paidCents,
       Math.max(0, totalCents - paidCents),
@@ -406,6 +418,8 @@ export function payOrder(input: {
         [input.orderId]
       )
       setTableStatus((order as { tableId: number | null }).tableId, 'free')
+      /* Seal the sale: sequential fiscal number + chained hash. */
+      sealOrder(input.orderId)
     }
   })
   writeAudit('orders.pay', 'order', input.orderId)

@@ -39,6 +39,36 @@ export interface UserRow {
   createdAt: string
 }
 
+/** One stamp-duty bracket: the rate (DA per 100 DA) applied when the cash amount is ≤ uptoCents (null = no upper bound). */
+export interface StampBracket {
+  uptoCents: number | null
+  ratePerHundred: number
+}
+
+export interface FiscalClosure {
+  id: number
+  kind: 'day' | 'year'
+  periodKey: string
+  fromAt: string
+  toAt: string
+  salesCount: number
+  grossCents: number
+  taxCents: number
+  stampCents: number
+  netCents: number
+  firstSeq: number | null
+  lastSeq: number | null
+  chainHash: string
+  createdAt: string
+}
+
+export interface IntegrityReport {
+  ok: boolean
+  checkedAt: string
+  orders: { checked: number; brokenAt: number | null; headHash: string | null }
+  audit: { checked: number; legacyRows: number; brokenAt: number | null; headHash: string | null }
+}
+
 /** Opening hours per weekday (0 = Sunday … 6 = Saturday); null/missing = closed that day. */
 export type BranchHours = Partial<Record<'0' | '1' | '2' | '3' | '4' | '5' | '6', { open: string; close: string } | null>>
 
@@ -117,6 +147,21 @@ export interface AppSettings {
   uiMode: 'simple' | 'full'
   /** URL-safe tenant id for the restaurant's own site (a-z, 0-9, dashes). */
   restaurantSlug: string
+  /** Fiscal identity printed on tickets (Algeria). */
+  legalName: string
+  nif: string
+  nis: string
+  rc: string
+  ai: string
+  fiscalAddress: string
+  /** Classified tourist restaurant → reduced TVA (9%) applies. */
+  touristClassified: boolean
+  /** Stamp duty (timbre fiscal) on cash receipts. */
+  stampEnabled: boolean
+  stampBrackets: StampBracket[]
+  stampMinCents: number
+  /** 0 = no cap. */
+  stampMaxCents: number
   taxEnabled: boolean
   taxRateBp: number
   taxInclusive: boolean
@@ -350,6 +395,11 @@ export interface Order {
   dueCents: number
   note: string | null
   covers: number
+  /** Stamp duty charged on the cash part of the payment (0 when disabled). */
+  stampCents: number
+  /** Sequential fiscal number + hash chain, set once the sale is completed (sealed). */
+  fiscalSeq: number | null
+  fiscalHash: string | null
   isHeld: boolean
   stockDeducted: boolean
   scheduledFor: string | null

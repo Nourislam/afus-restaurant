@@ -26,6 +26,8 @@ import type {
   Branch,
   BranchHours,
   BranchOverride,
+  FiscalClosure,
+  IntegrityReport,
   LoginProfile,
   RoleRow,
   Supplier,
@@ -339,6 +341,15 @@ export const api = {
     stop: () => call<WebsiteConfig>('website.stop'),
     export: () => call<{ dir: string; files: string[] }>('website.export'),
     orders: () => call<OrderSummary[]>('website.orders')
+  },
+
+  fiscal: {
+    verify: () => call<IntegrityReport>('fiscal.verify'),
+    closePeriod: (kind: 'day' | 'year', key: string) => call<FiscalClosure>('fiscal.closePeriod', { kind, key }),
+    closures: () => call<FiscalClosure[]>('fiscal.closures'),
+    export: (from: string, to: string) => call<{ dir: string; files: string[]; count: number }>('fiscal.export', { from, to }),
+    attestation: (language: 'ar' | 'fr') => call<{ html: string }>('fiscal.attestation', { language }),
+    previewStamp: (cashCents: number) => call<{ stampCents: number }>('fiscal.previewStamp', { cashCents })
   },
 
   branches: {

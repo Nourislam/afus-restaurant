@@ -9,6 +9,7 @@ import { getSettings } from './settings'
 import { toSession } from './auth'
 import { uniqueUsername } from './users'
 import { ensureDefaultBranch } from './branches'
+import { writeAuditAs } from './audit'
 
 export interface CompleteSetupInput {
   restaurantName: string
@@ -66,14 +67,7 @@ export function completeSetup(input: CompleteSetupInput): UserSession {
   seedStarterCatalog()
   /* Every restaurant starts with one main branch; multi-site owners add more. */
   ensureDefaultBranch({ nameAr: 'الفرع الرئيسي', nameFr: 'Succursale principale', address: input.address ?? null, phone: input.phone ?? null })
-  dbWrite('INSERT INTO audit_log (userId, action, entity, entityId, details, createdAt) VALUES (?, ?, ?, ?, ?, ?)', [
-    created.lastInsertRowid,
-    'setup.complete',
-    'app',
-    '1',
-    JSON.stringify({ restaurantName }),
-    stamp
-  ])
+  writeAuditAs(Number(created.lastInsertRowid), 'setup.complete', 'app', '1', { restaurantName })
 
   setSession({ userId: created.lastInsertRowid, username, issuedAt: Date.now() })
   const row = dbGet<{

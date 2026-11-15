@@ -9,12 +9,26 @@ const escape = (value: string | null | undefined): string =>
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
 
-function header(settings: AppSettings, title: string): string {
+/** Fiscal identity lines (raison sociale, NIF/NIS/RC/AI, adresse fiscale) — printed on the customer ticket only. */
+function fiscalIdentity(settings: AppSettings): string {
+  const ids = [
+    settings.nif ? `NIF ${settings.nif}` : '',
+    settings.nis ? `NIS ${settings.nis}` : '',
+    settings.rc ? `RC ${settings.rc}` : '',
+    settings.ai ? `AI ${settings.ai}` : ''
+  ].filter(Boolean)
+  return `${settings.legalName && settings.legalName !== settings.restaurantName ? `<p class="legal">${escape(settings.legalName)}</p>` : ''}
+    ${settings.fiscalAddress && settings.fiscalAddress !== settings.address ? `<p>${escape(settings.fiscalAddress)}</p>` : ''}
+    ${ids.length ? `<p class="ids" dir="ltr">${ids.map(escape).join(' · ')}</p>` : ''}`
+}
+
+function header(settings: AppSettings, title: string, withFiscal = false): string {
   return `<header>
     ${settings.logo ? `<img src="${escape(settings.logo)}" alt="logo" />` : ''}
     <h1>${escape(settings.restaurantName)}</h1>
     ${settings.address ? `<p>${escape(settings.address)}</p>` : ''}
     ${settings.phone ? `<p>${escape(settings.phone)}</p>` : ''}
+    ${withFiscal ? fiscalIdentity(settings) : ''}
     <div class="doc">${escape(title)}</div>
   </header>`
 }
@@ -26,6 +40,8 @@ const BASE_CSS = `
   header img{max-height:60px;display:block;margin:0 auto 6px}
   header h1{font-size:16px;margin:0 0 2px;letter-spacing:.3px}
   header p{font-size:10px;margin:1px 0;color:#444}
+  header .legal{font-weight:bold;color:#222}
+  header .ids{font-size:9px;letter-spacing:.2px;color:#333;font-variant-numeric:tabular-nums}
   .doc{font-size:12px;font-weight:bold;margin-top:6px}
   .meta{display:flex;justify-content:space-between;font-size:10px;margin-bottom:8px}
   table{width:100%;border-collapse:collapse;font-size:10.5px}
@@ -40,6 +56,7 @@ const BASE_CSS = `
   .totals .grand{font-size:14px;font-weight:bold;border-top:1px dashed #999;margin-top:4px;padding-top:5px}
   footer{text-align:center;font-size:9px;color:#555;margin-top:12px;border-top:1px dashed #999;padding-top:6px}
   .badge{display:inline-block;border:1px solid #333;border-radius:3px;padding:1px 4px;font-size:9px;margin:0 2px}
+  .fiscal{font-family:Menlo,Consolas,monospace;font-size:8.5px;color:#333;margin-top:4px;direction:ltr}
 `
 
 export function receiptHtml(order: Order, settings: AppSettings, language: Lang, paper: '80' | '58' | 'a4' = '80'): string {
@@ -74,13 +91,18 @@ export function receiptHtml(order: Order, settings: AppSettings, language: Lang,
 
   const labels =
     language === 'ar'
-      ? { title: 'وصل الزبون', order: 'طلب', table: 'طاولة', waiter: 'نادل', subtotal: 'المجموع', discount: 'تخفيض', tax: 'ضريبة (معلومة)', delivery: 'توصيل', total: 'الإجمالي', paid: 'المدفوع', due: 'المتبقي', thanks: 'شكراً لزيارتكم', item: 'الصنف', qty: 'كمية', amount: 'المبلغ', type: 'النوع', date: 'التاريخ' }
-      : { title: 'Ticket client', order: 'Commande', table: 'Table', waiter: 'Serveur', subtotal: 'Sous-total', discount: 'Remise', tax: 'TVA (info)', delivery: 'Livraison', total: 'Total', paid: 'Payé', due: 'Reste', thanks: 'Merci de votre visite', item: 'Article', qty: 'Qté', amount: 'Montant', type: 'Type', date: 'Date' }
+      ? { title: 'وصل الزبون', order: 'طلب', table: 'طاولة', waiter: 'نادل', subtotal: 'المجموع', discount: 'تخفيض', tax: 'ضريبة (معلومة)', delivery: 'توصيل', total: 'الإجمالي', paid: 'المدفوع', due: 'المتبقي', thanks: 'شكراً لزيارتكم', item: 'الصنف', qty: 'كمية', amount: 'المبلغ', type: 'النوع', date: 'التاريخ', fiscalNo: 'رقم جبائي', stamp: 'طابع جبائي', integrity: 'رمز السلامة' }
+      : { title: 'Ticket client', order: 'Commande', table: 'Table', waiter: 'Serveur', subtotal: 'Sous-total', discount: 'Remise', tax: 'TVA (info)', delivery: 'Livraison', total: 'Total', paid: 'Payé', due: 'Reste', thanks: 'Merci de votre visite', item: 'Article', qty: 'Qté', amount: 'Montant', type: 'Type', date: 'Date', fiscalNo: 'N° fiscal', stamp: 'Timbre fiscal', integrity: 'Code d’intégrité' }
+
+  const taxLabel = settings.taxEnabled && settings.taxRateBp > 0 ? `${language === 'ar' ? 'ض.ق.م' : 'TVA'} ${(settings.taxRateBp / 100).toLocaleString(language === 'ar' ? 'ar-DZ' : 'fr-DZ', { maximumFractionDigits: 2 })}%` : labels.tax
+  const fiscalNo = order.fiscalSeq ? `${labels.fiscalNo}: <strong dir="ltr">${order.fiscalSeq}</strong>` : ''
+  const integrity = order.fiscalHash ? `<div class="fiscal">${labels.integrity}: ${order.fiscalHash.slice(0, 16).toUpperCase()}</div>` : ''
 
   return `<!doctype html><html lang="${language}" dir="${language === 'ar' ? 'rtl' : 'ltr'}"><head><meta charset="utf-8" />
   <style>${BASE_CSS}${pageCss}</style></head><body>
-  ${header(settings, labels.title)}
+  ${header(settings, labels.title, true)}
   <div class="meta"><span>${labels.order}: <strong>${escape(order.orderNumber)}</strong></span><span>${labels.date}: ${formatDate(order.createdAt)} ${formatTime(order.createdAt)}</span></div>
+  ${fiscalNo ? `<div class="meta"><span>${fiscalNo}</span></div>` : ''}
   <div class="meta"><span>${labels.type}: ${escape(order.type)}</span><span>${order.tableName ? `${labels.table}: ${escape(order.tableName)}` : ''}</span></div>
   ${order.waiterName ? `<div class="meta"><span>${labels.waiter}: ${escape(order.waiterName)}</span></div>` : ''}
   <table><thead><tr><th>${labels.item}</th><th class="num">${labels.qty}</th><th class="num">${labels.amount}</th></tr></thead>
@@ -89,14 +111,15 @@ export function receiptHtml(order: Order, settings: AppSettings, language: Lang,
     <div><span>${labels.subtotal}</span><span class="num">${formatMoney(order.subtotalCents, currency, 0)}</span></div>
     ${order.discountCents > 0 ? `<div><span>${labels.discount}</span><span class="num">-${formatMoney(order.discountCents, currency, 0)}</span></div>` : ''}
     ${order.deliveryFeeCents > 0 ? `<div><span>${labels.delivery}</span><span class="num">${formatMoney(order.deliveryFeeCents, currency, 0)}</span></div>` : ''}
-    ${order.taxCents > 0 ? `<div><span>${labels.tax}</span><span class="num">${formatMoney(order.taxCents, currency, 0)}</span></div>` : ''}
+    ${order.taxCents > 0 ? `<div><span>${taxLabel}</span><span class="num">${formatMoney(order.taxCents, currency, 0)}</span></div>` : ''}
+    ${order.stampCents > 0 ? `<div><span>${labels.stamp}</span><span class="num">${formatMoney(order.stampCents, currency, 0)}</span></div>` : ''}
     <div class="grand"><span>${labels.total}</span><span class="num">${formatMoney(order.totalCents, currency, 0)}</span></div>
     ${paymentRows}
     <div><span>${labels.paid}</span><span class="num">${formatMoney(order.paidCents, currency, 0)}</span></div>
     ${order.dueCents > 0 ? `<div><span>${labels.due}</span><span class="num">${formatMoney(order.dueCents, currency, 0)}</span></div>` : ''}
   </div>
   ${order.note ? `<p class="note">${escape(order.note)}</p>` : ''}
-  <footer>${escape(settings.receiptFooter || labels.thanks)}<br/>${escape(settings.restaurantName)}</footer>
+  <footer>${escape(settings.receiptFooter || labels.thanks)}<br/>${escape(settings.restaurantName)}${integrity}</footer>
   </body></html>`
 }
 

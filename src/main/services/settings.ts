@@ -14,6 +14,24 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'dark',
   uiMode: 'simple',
   restaurantSlug: 'restaurant',
+  /* Fiscal identity (Algeria) — printed on every ticket once filled in. */
+  legalName: '',
+  nif: '',
+  nis: '',
+  rc: '',
+  ai: '',
+  fiscalAddress: '',
+  touristClassified: false,
+  /* Stamp duty on cash receipts. Off by default; brackets are editable —
+     the owner must confirm the current rates with their accountant. */
+  stampEnabled: false,
+  stampBrackets: [
+    { uptoCents: 3_000_000, ratePerHundred: 1 },
+    { uptoCents: 10_000_000, ratePerHundred: 1.5 },
+    { uptoCents: null, ratePerHundred: 2 }
+  ],
+  stampMinCents: 500,
+  stampMaxCents: 0,
   taxEnabled: false,
   taxRateBp: 0,
   taxInclusive: false,
@@ -43,6 +61,20 @@ const settingsPatchSchema = z
     theme: z.enum(['light', 'dark']),
     uiMode: z.enum(['simple', 'full']),
     restaurantSlug: z.string().regex(/^[a-z0-9][a-z0-9-]{1,39}$/),
+    legalName: z.string().max(160),
+    nif: z.string().max(32),
+    nis: z.string().max(32),
+    rc: z.string().max(40),
+    ai: z.string().max(32),
+    fiscalAddress: z.string().max(240),
+    touristClassified: z.boolean(),
+    stampEnabled: z.boolean(),
+    stampBrackets: z
+      .array(z.object({ uptoCents: z.number().int().positive().nullable(), ratePerHundred: z.number().min(0).max(100) }))
+      .min(1)
+      .max(8),
+    stampMinCents: z.number().int().min(0).max(1_000_000),
+    stampMaxCents: z.number().int().min(0).max(100_000_000),
     taxEnabled: z.boolean(),
     taxRateBp: z.number().int().min(0).max(10000),
     taxInclusive: z.boolean(),

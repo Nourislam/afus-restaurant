@@ -5,7 +5,7 @@
  * column name, so services hand domain objects straight to the renderer without
  * a mapping layer (and without the drift that comes with one).
  */
-export const SCHEMA_VERSION = 4
+export const SCHEMA_VERSION = 5
 
 const V1 = `
 CREATE TABLE IF NOT EXISTS roles (
@@ -442,9 +442,41 @@ CREATE TABLE IF NOT EXISTS branch_product_overrides (
 );
 `
 
+/* V5 — fiscal compliance (Algeria, LF2026 art. 74): sealed sales with a
+   sequential fiscal number and a hash chain, a hash-chained audit log, stamp
+   duty on cash receipts, and period closures (Z reports). Non-destructive. */
+const V5 = `
+ALTER TABLE orders ADD COLUMN stampCents INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN fiscalSeq INTEGER;
+ALTER TABLE orders ADD COLUMN fiscalHash TEXT;
+ALTER TABLE orders ADD COLUMN fiscalPrevHash TEXT;
+ALTER TABLE audit_log ADD COLUMN prevHash TEXT;
+ALTER TABLE audit_log ADD COLUMN hash TEXT;
+
+CREATE TABLE IF NOT EXISTS fiscal_closures (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  kind TEXT NOT NULL,
+  periodKey TEXT NOT NULL,
+  fromAt TEXT NOT NULL,
+  toAt TEXT NOT NULL,
+  salesCount INTEGER NOT NULL DEFAULT 0,
+  grossCents INTEGER NOT NULL DEFAULT 0,
+  taxCents INTEGER NOT NULL DEFAULT 0,
+  stampCents INTEGER NOT NULL DEFAULT 0,
+  netCents INTEGER NOT NULL DEFAULT 0,
+  firstSeq INTEGER,
+  lastSeq INTEGER,
+  chainHash TEXT NOT NULL,
+  createdAt TEXT NOT NULL,
+  UNIQUE (kind, periodKey)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_fiscal_seq ON orders (fiscalSeq);
+`
+
 export const MIGRATIONS: Record<number, string> = {
   1: V1,
   2: V2,
   3: V3,
-  4: V4
+  4: V4,
+  5: V5
 }

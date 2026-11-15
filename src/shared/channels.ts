@@ -134,7 +134,13 @@ export const CHANNELS = [
   'branches.setOpen',
   'branches.setActive',
   'branches.overrides',
-  'branches.setOverride'
+  'branches.setOverride',
+  'fiscal.verify',
+  'fiscal.closePeriod',
+  'fiscal.closures',
+  'fiscal.export',
+  'fiscal.attestation',
+  'fiscal.previewStamp'
 ] as const
 
 export type Channel = (typeof CHANNELS)[number]
