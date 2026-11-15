@@ -56,6 +56,31 @@ describe('storefront rendering', () => {
     expect(multi).toContain('"name":"Branch 3"')
   })
 
+  it('carries the menu search, the sticky category rail and a dismissable error box', () => {
+    const html = renderStorefront(bundle())
+    expect(html).toContain('id="q"')
+    expect(html).toContain('id="qclear"')
+    expect(html).toContain('id="nores"')
+    expect(html).toContain('.menutools{position:sticky')
+    expect(html).toContain('.catnav button.on')
+    expect(html).toContain('id="ferr"')
+    /* The old blocking alerts are gone: errors are shown in the sheet itself. */
+    expect(html).not.toContain('alert(tt.fillName)')
+  })
+
+  it('reserves room for every dish photo and loads it lazily (no layout jump)', () => {
+    const html = renderStorefront(bundle())
+    expect(html).toContain('width="58" height="58" loading="lazy"')
+    expect(html).toContain("loading=\"lazy\" decoding=\"async\"")
+  })
+
+  it('makes the basket sheet a real dialog that Escape can close', () => {
+    const html = renderStorefront(bundle())
+    expect(html).toContain('role="dialog" aria-modal="true"')
+    expect(html).toContain('e.key==="Escape"')
+    expect(html).toContain('id="fabTotal"')
+  })
+
   it('escapes HTML in the title and never breaks out of the data script', () => {
     const b = bundle()
     b.data.fr.restaurant.name = '</script><script>alert(1)</script>'

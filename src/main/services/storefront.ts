@@ -137,8 +137,23 @@ export function renderStorefront(bundle: StorefrontBundle): string {
   .fcard .price{font-family:var(--latin);font-weight:600;font-size:20px;color:var(--accent)}
   .addmini{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:22px;line-height:1;cursor:pointer;transition:.18s}
   .addmini:hover{background:var(--accent);color:#1a120b;border-color:var(--accent)} [data-mood="nar"] .addmini:hover{color:#fff}
-  .catnav{display:flex;gap:9px;overflow-x:auto;padding:4px 0 16px;margin-bottom:6px;scrollbar-width:none} .catnav::-webkit-scrollbar{display:none}
-  .catnav button{white-space:nowrap;background:transparent;border:1px solid var(--line);color:var(--ink-soft);padding:9px 16px;border-radius:999px;font-family:var(--body);font-weight:600;font-size:13.5px;cursor:pointer}
+  /* The category rail stays within reach down the whole menu, and marks where
+     you are as you scroll. */
+  .menutools{position:sticky;inset-block-start:0;z-index:30;padding:10px 0 12px;margin-bottom:6px;background:linear-gradient(180deg,var(--bg) 62%,transparent)}
+  .search{position:relative;margin-bottom:10px}
+  .search input{width:100%;height:46px;padding:0 44px;border-radius:14px;border:1px solid var(--line);background:color-mix(in srgb,var(--surface) 70%,transparent);color:var(--ink);font-family:var(--body);font-size:15px}
+  .search input:focus{outline:none;border-color:var(--accent)}
+  .search svg{position:absolute;inset-block-start:13px;inset-inline-start:15px;width:20px;height:20px;color:var(--ink-faint)}
+  .search .clear{position:absolute;inset-block-start:9px;inset-inline-end:8px;width:30px;height:30px;border-radius:50%;border:0;background:transparent;color:var(--ink-faint);font-size:17px;cursor:pointer}
+  .catnav{display:flex;gap:9px;overflow-x:auto;padding:2px 0;scrollbar-width:none} .catnav::-webkit-scrollbar{display:none}
+  .catnav button{white-space:nowrap;background:transparent;border:1px solid var(--line);color:var(--ink-soft);padding:9px 16px;border-radius:999px;font-family:var(--body);font-weight:600;font-size:13.5px;cursor:pointer;transition:.18s}
+  .catnav button.on{background:var(--accent);border-color:var(--accent);color:#1a120b} [data-mood="nar"] .catnav button.on{color:#fff}
+  .nores{text-align:center;color:var(--ink-faint);padding:52px 0;font-size:15px}
+  /* A dish already in the basket shows its own counter: no need to open the cart. */
+  .dish .rowstep{display:flex;align-items:center;gap:6px;flex:none}
+  .dish .rowstep button{width:34px;height:34px;border-radius:11px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:18px;line-height:1;cursor:pointer}
+  .dish .rowstep b{min-width:20px;text-align:center;font-variant-numeric:tabular-nums;font-family:var(--latin)}
+  .err{margin:0 0 10px;padding:10px 12px;border-radius:11px;background:color-mix(in srgb,#e5544a 18%,transparent);color:var(--ink);font-size:13.5px;font-weight:600}
   .cat{margin-top:44px} .cat:first-of-type{margin-top:0}
   .catname{font-family:var(--display);font-weight:700;font-size:clamp(28px,4.5vw,42px);margin-bottom:4px}
   .catrule{height:1px;background:var(--line);margin:14px 0 6px}
@@ -164,6 +179,7 @@ export function renderStorefront(bundle: StorefrontBundle): string {
   footer .pb{display:inline-flex;gap:7px;align-items:center;font-size:12.5px;margin-top:14px} footer .pb b{color:var(--accent);font-weight:700}
   .cartfab{position:fixed;inset-block-end:20px;inset-inline-end:20px;z-index:45;display:none;align-items:center;gap:12px;height:60px;padding:0 14px 0 24px;border-radius:18px;background:var(--accent);color:#1a120b;border:0;cursor:pointer;font-family:var(--body);font-weight:800;font-size:16px;box-shadow:0 18px 40px -12px var(--glow)}
   [data-mood="nar"] .cartfab{color:#fff} .cartfab .c{background:rgba(0,0,0,.18);border-radius:12px;min-width:30px;height:34px;display:grid;place-items:center;padding:0 9px}
+  .cartfab .ft{font-family:var(--latin);font-weight:600;opacity:.85;font-size:14.5px}
   .scrim{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);opacity:0;pointer-events:none;transition:opacity .3s} .scrim.open{opacity:1;pointer-events:auto}
   .drawer{position:fixed;z-index:61;inset-block:0;inset-inline-end:0;width:min(440px,100%);background:var(--bg2);border-inline-start:1px solid var(--line);transform:translateX(110%);transition:transform .35s cubic-bezier(.4,0,.1,1);display:flex;flex-direction:column;box-shadow:-20px 0 60px -20px var(--shadow)}
   [dir="rtl"] .drawer{transform:translateX(-110%)} .drawer.open{transform:none}
@@ -191,24 +207,26 @@ export function renderStorefront(bundle: StorefrontBundle): string {
 <header class="hero"><div class="ember"></div><div id="heroBody"></div></header>
 <div id="closedBanner"></div>
 <section class="band wrap" id="featSec"><div class="shead"><div><div class="k" id="specK"></div><h2 id="specH"></h2></div><p id="specP"></p></div><div class="feat" id="feat"></div></section>
-<section class="band wrap" id="menu"><div class="shead"><div><div class="k" id="menuK"></div><h2 id="menuH"></h2></div><p id="menuP"></p></div><nav class="catnav" id="catnav"></nav><div id="menuList"></div></section>
+<section class="band wrap" id="menu"><div class="shead"><div><div class="k" id="menuK"></div><h2 id="menuH"></h2></div><p id="menuP"></p></div>
+<div class="menutools"><div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" type="search" autocomplete="off"><button class="clear" id="qclear" hidden>&#10005;</button></div><nav class="catnav" id="catnav" aria-label="menu"></nav></div>
+<div id="menuList"></div><div class="nores" id="nores" hidden></div></section>
 <section class="band wrap"><div class="visit"><div id="visitBody"></div><div class="platter" id="platter"></div></div></section>
 <footer><div class="fl" id="footName"></div><div id="footTag" style="color:var(--ink-soft)"></div><div class="pb">⚡ <span id="poweredBy"></span> <b>Afus</b></div></footer>
-<button class="cartfab" id="cartfab"><span id="viewOrder"></span><span class="c" id="fabCount">0</span></button>
+<button class="cartfab" id="cartfab" aria-live="polite"><span id="viewOrder"></span><span class="ft" id="fabTotal"></span><span class="c" id="fabCount">0</span></button>
 <div class="scrim" id="scrim"></div>
-<aside class="drawer" id="drawer"><div class="dhead"><h3 id="yourOrder"></h3><button class="x" id="closeCart" aria-label="Close">✕</button></div><div class="closedNote" id="closedNote" hidden></div><div class="ditems" id="ditems"></div><div class="dfoot" id="dfoot" hidden></div></aside>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="yourOrder"><div class="dhead"><h3 id="yourOrder"></h3><button class="x" id="closeCart" aria-label="Close">✕</button></div><div class="closedNote" id="closedNote" hidden></div><div class="ditems" id="ditems"></div><div class="dfoot" id="dfoot" hidden></div></aside>
 <script id="afus-data" type="application/json">${embed(bundle)}</script>
 <script>
 (function(){
   "use strict";
   var B = JSON.parse(document.getElementById("afus-data").textContent);
   var T = {
-    ar:{eyebrow:"مطعم · الجزائر",open:"مفتوح الآن",closed:"مغلق الآن",order:"اطلب الآن",seeMenu:"تصفّح القائمة",specK:"المختارة",specH:"أطباق الدار",specP:"الأكثر طلبًا عندنا.",menuK:"القائمة",menuH:"كل ما نقدّمه",menuP:"الأسعار بالدينار الجزائري. اضغط على أي طبق لإضافته.",visitK:"زورونا",visitH:"على مائدتنا",vAddr:"العنوان",vHours:"الأوقات",vPhone:"الهاتف",vDeliv:"التوصيل",poweredBy:"موقع من إنشاء",viewOrder:"عرض الطلب",yourOrder:"طلبك",empty:"سلتك فارغة. اختر من القائمة.",delivery:"توصيل",pickup:"استلام",name:"الاسم",phone:"الهاتف",address:"العنوان",note:"ملاحظة (اختياري)",total:"المجموع",sendWa:"أرسل عبر واتساب",sendApi:"أرسل الطلب",na:"غير متوفر",add:"إضافة",waHi:"السلام عليكم، أريد أن أطلب من",waType:"نوع الطلب",waTotal:"المجموع",waName:"الاسم",waPhone:"الهاتف",waAddr:"العنوان",waNote:"ملاحظة",waBranch:"الفرع",fillName:"اكتب اسمك ورقم هاتفك.",sent:"تم إرسال طلبك!",sentSub:"سيتصل بك المطعم للتأكيد.",fail:"تعذّر الإرسال، حاول مجددًا",lang:"Français"},
-    fr:{eyebrow:"Restaurant · Algérie",open:"Ouvert",closed:"Fermé",order:"Commander",seeMenu:"Voir la carte",specK:"Sélection",specH:"Plats maison",specP:"Nos plats les plus demandés.",menuK:"La carte",menuH:"Tout ce que nous servons",menuP:"Prix en dinars algériens. Touchez un plat pour l'ajouter.",visitK:"Visitez-nous",visitH:"À notre table",vAddr:"Adresse",vHours:"Horaires",vPhone:"Téléphone",vDeliv:"Livraison",poweredBy:"Site réalisé avec",viewOrder:"Voir la commande",yourOrder:"Votre commande",empty:"Votre panier est vide.",delivery:"Livraison",pickup:"À emporter",name:"Nom",phone:"Téléphone",address:"Adresse",note:"Note (facultatif)",total:"Total",sendWa:"Envoyer sur WhatsApp",sendApi:"Envoyer la commande",na:"Indisponible",add:"Ajouter",waHi:"Bonjour, je souhaite commander chez",waType:"Type",waTotal:"Total",waName:"Nom",waPhone:"Téléphone",waAddr:"Adresse",waNote:"Note",waBranch:"Succursale",fillName:"Entrez votre nom et téléphone.",sent:"Commande envoyée !",sentSub:"Le restaurant vous contactera pour confirmer.",fail:"Échec, réessayez",lang:"العربية"}
+    ar:{eyebrow:"مطعم · الجزائر",open:"مفتوح الآن",closed:"مغلق الآن",order:"اطلب الآن",seeMenu:"تصفّح القائمة",specK:"المختارة",specH:"أطباق الدار",specP:"الأكثر طلبًا عندنا.",menuK:"القائمة",menuH:"كل ما نقدّمه",menuP:"الأسعار بالدينار الجزائري. اضغط على أي طبق لإضافته.",visitK:"زورونا",visitH:"على مائدتنا",vAddr:"العنوان",vHours:"الأوقات",vPhone:"الهاتف",vDeliv:"التوصيل",poweredBy:"موقع من إنشاء",viewOrder:"عرض الطلب",yourOrder:"طلبك",empty:"سلتك فارغة. اختر من القائمة.",delivery:"توصيل",pickup:"استلام",name:"الاسم",phone:"الهاتف",address:"العنوان",note:"ملاحظة (اختياري)",total:"المجموع",sendWa:"أرسل عبر واتساب",sendApi:"أرسل الطلب",na:"غير متوفر",add:"إضافة",waHi:"السلام عليكم، أريد أن أطلب من",waType:"نوع الطلب",waTotal:"المجموع",waName:"الاسم",waPhone:"الهاتف",waAddr:"العنوان",waNote:"ملاحظة",waBranch:"الفرع",fillName:"اكتب اسمك ورقم هاتفك.",sent:"تم إرسال طلبك!",sentSub:"سيتصل بك المطعم للتأكيد.",fail:"تعذّر الإرسال، حاول مجددًا",lang:"Français",search:"ابحث عن طبق…",noRes:"لا يوجد طبق بهذا الاسم.",all:"الكل"},
+    fr:{eyebrow:"Restaurant · Algérie",open:"Ouvert",closed:"Fermé",order:"Commander",seeMenu:"Voir la carte",specK:"Sélection",specH:"Plats maison",specP:"Nos plats les plus demandés.",menuK:"La carte",menuH:"Tout ce que nous servons",menuP:"Prix en dinars algériens. Touchez un plat pour l'ajouter.",visitK:"Visitez-nous",visitH:"À notre table",vAddr:"Adresse",vHours:"Horaires",vPhone:"Téléphone",vDeliv:"Livraison",poweredBy:"Site réalisé avec",viewOrder:"Voir la commande",yourOrder:"Votre commande",empty:"Votre panier est vide.",delivery:"Livraison",pickup:"À emporter",name:"Nom",phone:"Téléphone",address:"Adresse",note:"Note (facultatif)",total:"Total",sendWa:"Envoyer sur WhatsApp",sendApi:"Envoyer la commande",na:"Indisponible",add:"Ajouter",waHi:"Bonjour, je souhaite commander chez",waType:"Type",waTotal:"Total",waName:"Nom",waPhone:"Téléphone",waAddr:"Adresse",waNote:"Note",waBranch:"Succursale",fillName:"Entrez votre nom et téléphone.",sent:"Commande envoyée !",sentSub:"Le restaurant vous contactera pour confirmer.",fail:"Échec, réessayez",lang:"العربية",search:"Chercher un plat…",noRes:"Aucun plat à ce nom.",all:"Tout"}
   };
   var EMB='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c1.5 4 5 4.5 5 9a5 5 0 0 1-10 0c0-2 1-3 1.5-3.5C9 9 10.5 8 12 2z"/><path d="M12 22v-5"/></svg>';
   var PLATE='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c1 3 4 3.6 4 7a4 4 0 0 1-8 0c0-2 1-2.7 1.5-3.5"/><path d="M5.5 13a6.5 6.5 0 0 0 13 0"/><path d="M4 16.5h16"/><path d="M6 20h12"/></svg>';
-  var lang=B.initialLang, cart={}, otype=B.orderTypes[0]||"delivery";
+  var lang=B.initialLang, cart={}, otype=B.orderTypes[0]||"delivery", query="", spy=null;
   var qs=new URLSearchParams(location.search); var branchId = +(qs.get("branch")||0) || B.defaultBranchId;
   function D(){ return B.data[lang]; }
   function br(){ var d=D(); return d.branches.find(function(b){return b.id===branchId}) || d.branches[0]; }
@@ -234,6 +252,7 @@ export function renderStorefront(bundle: StorefrontBundle): string {
     id("menuK").textContent=tt.menuK; id("menuH").textContent=tt.menuH; id("menuP").textContent=tt.menuP;
     id("footName").textContent=d.restaurant.name; id("footTag").textContent=d.restaurant.tagline; id("poweredBy").textContent=tt.poweredBy;
     id("viewOrder").textContent=tt.viewOrder; id("yourOrder").textContent=tt.yourOrder; id("closedNote").textContent=d.closedMessage;
+    id("q").placeholder=tt.search; id("q").setAttribute("aria-label",tt.search); id("nores").textContent=tt.noRes;
     renderFeatured(); renderMenu(); renderVisit(); renderCart();
   }
   function allDishes(){ var out=[]; (br()?br().categories:[]).forEach(function(c){c.products.forEach(function(p){out.push(p)})}); return out; }
@@ -242,19 +261,88 @@ export function renderStorefront(bundle: StorefrontBundle): string {
     var picks=allDishes().filter(function(p){return p.available}).sort(function(x,y){return y.priceCents-x.priceCents}).slice(0,3);
     id("featSec").style.display=picks.length?"":"none"; el.innerHTML="";
     picks.forEach(function(p){ var c=document.createElement("article"); c.className="fcard";
-      c.innerHTML='<div class="fimg">'+(p.image?'<img src="'+esc(p.image)+'" alt="">':EMB)+'</div><div class="fb"><h3>'+esc(p.name)+'</h3><p>'+esc(p.description||"")+'</p><div class="fp"><span class="price">'+fmt(p.priceCents)+'</span>'+(open?'<button class="addmini" aria-label="'+tt.add+'">+</button>':'')+'</div></div>';
+      c.innerHTML='<div class="fimg">'+(p.image?'<img src="'+esc(p.image)+'" alt="" loading="lazy" decoding="async">':EMB)+'</div><div class="fb"><h3>'+esc(p.name)+'</h3><p>'+esc(p.description||"")+'</p><div class="fp"><span class="price">'+fmt(p.priceCents)+'</span>'+(open?'<button class="addmini" aria-label="'+tt.add+'">+</button>':'')+'</div></div>';
       var a=c.querySelector(".addmini"); if(a) a.addEventListener("click",function(){add(p)}); el.appendChild(c); });
   }
+  function matches(p){
+    if(!query) return true;
+    var q=query.toLowerCase();
+    return String(p.name||"").toLowerCase().indexOf(q)>=0 || String(p.description||"").toLowerCase().indexOf(q)>=0;
+  }
   function renderMenu(){
-    var b=br(), open=b&&b.openNow, nav=id("catnav"), list=id("menuList"), tt=T[lang]; nav.innerHTML=""; list.innerHTML="";
-    (b?b.categories:[]).forEach(function(cat){ if(!cat.products.length) return;
-      var nb=document.createElement("button"); nb.textContent=cat.name; nb.addEventListener("click",function(){id("cat-"+cat.id).scrollIntoView({behavior:"smooth",block:"start"})}); nav.appendChild(nb);
-      var sec=document.createElement("div"); sec.className="cat"; sec.id="cat-"+cat.id; sec.innerHTML='<div class="catname">'+esc(cat.name)+'</div><div class="catrule"></div>';
-      cat.products.forEach(function(p){ var ok=open&&p.available; var row=document.createElement("div"); row.className="dish"+(ok?"":" na");
-        row.innerHTML='<div class="th">'+(p.image?'<img src="'+esc(p.image)+'" alt="">':'🍽️')+'</div><div class="dn">'+esc(p.name)+'</div>'+(p.description?'<div class="dd">'+esc(p.description)+'</div>':'')+'<div class="right"><span class="dp">'+fmt(p.priceCents)+'</span>'+(ok?'<button class="plus" aria-label="'+tt.add+'">+</button>':'<span class="na-badge">'+tt.na+'</span>')+'</div>';
-        if(ok) row.addEventListener("click",function(){add(p); row.animate([{background:"color-mix(in srgb,var(--accent) 22%, transparent)"},{background:"transparent"}],{duration:500});});
-        sec.appendChild(row); });
-      list.appendChild(sec); });
+    var b=br(), open=b&&b.openNow, nav=id("catnav"), list=id("menuList"), tt=T[lang];
+    if(spy){ spy.disconnect(); spy=null; }
+    nav.innerHTML=""; list.innerHTML="";
+    var shown=0;
+    (b?b.categories:[]).forEach(function(cat){
+      var dishes=cat.products.filter(matches);
+      if(!dishes.length) return;
+      shown+=dishes.length;
+      var nb=document.createElement("button"); nb.type="button"; nb.textContent=cat.name; nb.dataset.cat=cat.id;
+      nb.addEventListener("click",function(){ id("cat-"+cat.id).scrollIntoView({behavior:"smooth",block:"start"}); });
+      nav.appendChild(nb);
+      var sec=document.createElement("div"); sec.className="cat"; sec.id="cat-"+cat.id; sec.dataset.cat=cat.id;
+      sec.innerHTML='<div class="catname">'+esc(cat.name)+'</div><div class="catrule"></div>';
+      dishes.forEach(function(p){
+        var ok=open&&p.available;
+        var row=document.createElement("div"); row.className="dish"+(ok?"":" na"); row.dataset.id=p.id;
+        /* width/height + lazy: the row keeps its height before the photo lands */
+        var thumb=p.image
+          ? '<img src="'+esc(p.image)+'" alt="" width="58" height="58" loading="lazy" decoding="async">'
+          : '🍽️';
+        row.innerHTML='<div class="th">'+thumb+'</div><div class="dn">'+esc(p.name)+'</div>'
+          +(p.description?'<div class="dd">'+esc(p.description)+'</div>':'')
+          +'<div class="right"><span class="dp">'+fmt(p.priceCents)+'</span><span class="rowslot"></span></div>';
+        sec.appendChild(row);
+        paintRow(row,p,ok,tt);
+      });
+      list.appendChild(sec);
+    });
+    id("nores").hidden = shown>0;
+    markCat(nav.querySelector("button"));
+    /* Which category you are reading is marked in the rail. */
+    if(window.IntersectionObserver){
+      spy=new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+          if(!e.isIntersecting) return;
+          markCat(nav.querySelector('[data-cat="'+e.target.dataset.cat+'"]'));
+        });
+      },{rootMargin:"-140px 0px -70% 0px"});
+      list.querySelectorAll(".cat").forEach(function(sec){ spy.observe(sec); });
+    }
+  }
+  function markCat(button){
+    if(!button) return;
+    id("catnav").querySelectorAll("button").forEach(function(x){ x.classList.toggle("on", x===button); x.setAttribute("aria-current", x===button?"true":"false"); });
+  }
+  /* The dish row shows "+" until it is in the basket, then its own counter. */
+  function paintRow(row,p,ok,tt){
+    var slot=row.querySelector(".rowslot"); if(!slot) return;
+    if(!ok){ slot.outerHTML='<span class="na-badge">'+tt.na+'</span>'; return; }
+    var line=cart[p.id];
+    if(!line){
+      slot.innerHTML='<button class="plus" type="button" aria-label="'+esc(tt.add+" "+p.name)+'">+</button>';
+      slot.querySelector("button").addEventListener("click",function(ev){ ev.stopPropagation(); add(p); });
+      return;
+    }
+    slot.innerHTML='<span class="rowstep"><button type="button" data-s="-" aria-label="−">−</button><b>'+line.qty+'</b><button type="button" data-s="+" aria-label="+">+</button></span>';
+    slot.querySelectorAll("[data-s]").forEach(function(x){
+      x.addEventListener("click",function(ev){
+        ev.stopPropagation();
+        step(p.id, x.dataset.s==="+"?1:-1);
+      });
+    });
+  }
+  function repaintRows(){
+    var b=br(), open=b&&b.openNow, tt=T[lang];
+    var byId={}; (b?b.categories:[]).forEach(function(c){ c.products.forEach(function(p){ byId[p.id]=p; }); });
+    document.querySelectorAll(".dish").forEach(function(row){
+      var p=byId[row.dataset.id]; if(!p) return;
+      var right=row.querySelector(".right");
+      var slot=right.querySelector(".rowslot");
+      if(!slot){ slot=document.createElement("span"); slot.className="rowslot"; right.appendChild(slot); }
+      paintRow(row,p,open&&p.available,tt);
+    });
   }
   function renderVisit(){
     var b=br(), tt=T[lang], d=D();
@@ -264,32 +352,42 @@ export function renderStorefront(bundle: StorefrontBundle): string {
       (b&&b.phone?'<div class="vrow"><span class="vk">'+tt.vPhone+'</span><span class="vv" dir="ltr" style="font-family:var(--latin)">'+esc(b.phone)+'</span></div>':'');
     id("platter").innerHTML = d.restaurant.logo ? '<img src="'+esc(d.restaurant.logo)+'" alt="">' : PLATE;
   }
-  function add(p){ if(!cart[p.id]) cart[p.id]={id:p.id,name:p.name,price:p.priceCents,qty:0}; cart[p.id].qty++; syncFab(); renderCart(); }
+  function add(p){ if(!cart[p.id]) cart[p.id]={id:p.id,name:p.name,price:p.priceCents,qty:0}; cart[p.id].qty++; syncFab(); renderCart(); repaintRows(); }
+  function step(productId,delta){
+    var line=cart[productId]; if(!line) return;
+    line.qty+=delta; if(line.qty<=0) delete cart[productId];
+    syncFab(); renderCart(); repaintRows();
+  }
   function count(){ return Object.values(cart).reduce(function(s,i){return s+i.qty},0); }
   function total(){ return Object.values(cart).reduce(function(s,i){return s+i.qty*i.price},0); }
-  function syncFab(){ var n=count(); id("cartfab").style.display=n>0?"flex":"none"; id("fabCount").textContent=n; }
+  function syncFab(){ var n=count(); id("cartfab").style.display=n>0?"flex":"none"; id("fabCount").textContent=n; id("fabTotal").textContent=n>0?fmt(total()):""; }
   function renderCart(){
     var b=br(), open=b&&b.openNow, box=id("ditems"), foot=id("dfoot"), tt=T[lang];
     id("closedNote").hidden=!!open;
     if(count()===0){ box.innerHTML='<div class="empty">'+tt.empty+'</div>'; foot.hidden=true; return; }
     box.innerHTML=Object.values(cart).map(function(i){return '<div class="citem"><div class="cn">'+esc(i.name)+'<small>'+fmt(i.price)+'</small></div><div class="step"><button data-m="-" data-id="'+i.id+'">−</button><b>'+i.qty+'</b><button data-m="+" data-id="'+i.id+'">+</button></div></div>'}).join("");
-    box.querySelectorAll("[data-m]").forEach(function(x){x.addEventListener("click",function(){var i=cart[x.dataset.id];i.qty+=x.dataset.m==="+"?1:-1;if(i.qty<=0)delete cart[x.dataset.id];syncFab();renderCart();});});
+    box.querySelectorAll("[data-m]").forEach(function(x){x.addEventListener("click",function(){ step(x.dataset.id, x.dataset.m==="+"?1:-1); });});
     foot.hidden=false;
     var seg=B.orderTypes.length>1?'<div class="seg">'+B.orderTypes.map(function(t){return '<button type="button" data-t="'+t+'" class="'+(t===otype?"on":"")+'">'+(t==="delivery"?tt.delivery:tt.pickup)+'</button>'}).join("")+'</div>':'';
-    foot.innerHTML=seg+'<div class="field"><label>'+tt.name+' *</label><input id="f-name" autocomplete="name"></div><div class="field"><label>'+tt.phone+' *</label><input id="f-phone" inputmode="tel" autocomplete="tel"></div>'+(otype==="delivery"?'<div class="field"><label>'+tt.address+'</label><input id="f-addr"></div>':'')+'<div class="field"><label>'+tt.note+'</label><textarea id="f-note" rows="2"></textarea></div><div class="total"><span class="tl">'+tt.total+'</span><span class="tv">'+fmt(total())+'</span></div>'+
+    foot.innerHTML=seg+'<div class="err" id="ferr" hidden></div><div class="field"><label>'+tt.name+' *</label><input id="f-name" autocomplete="name"></div><div class="field"><label>'+tt.phone+' *</label><input id="f-phone" inputmode="tel" autocomplete="tel"></div>'+(otype==="delivery"?'<div class="field"><label>'+tt.address+'</label><input id="f-addr"></div>':'')+'<div class="field"><label>'+tt.note+'</label><textarea id="f-note" rows="2"></textarea></div><div class="total"><span class="tl">'+tt.total+'</span><span class="tv">'+fmt(total())+'</span></div>'+
       '<button class="send'+(B.apiOrder?" api":"")+'" id="sendBtn"'+(open?"":" disabled")+'>'+(B.apiOrder?tt.sendApi:tt.sendWa)+'</button>';
     foot.querySelectorAll("[data-t]").forEach(function(x){x.addEventListener("click",function(){otype=x.dataset.t;renderCart();});});
     id("sendBtn").addEventListener("click",send);
   }
+  function showErr(message){
+    var box=id("ferr"); if(!box) return;
+    box.textContent=message; box.hidden=false; box.setAttribute("role","alert");
+  }
   function send(){
+    var box=id("ferr"); if(box) box.hidden=true;
     var b=br(); if(!(b&&b.openNow)) return;
     var tt=T[lang], name=(id("f-name").value||"").trim(), phone=(id("f-phone").value||"").trim(), addr=id("f-addr")?id("f-addr").value.trim():"", note=(id("f-note").value||"").trim();
-    if(!name||!phone){ alert(tt.fillName); return; }
+    if(!name||!phone){ showErr(tt.fillName); (name?id("f-phone"):id("f-name")).focus(); return; }
     if(B.apiOrder){
       var btn=id("sendBtn"); btn.disabled=true;
       fetch("/api/order",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({branchId:b.id,type:otype==="pickup"?"takeaway":"delivery",customerName:name,phone:phone,address:addr,note:note,items:Object.values(cart).map(function(i){return {productId:i.id,qty:i.qty}})})})
         .then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(res){ id("dfoot").hidden=true; id("ditems").innerHTML='<div class="ok"><div class="big">✅</div><h2 style="font-family:var(--display)">'+tt.sent+'</h2><p style="color:var(--ink-soft)">'+tt.sentSub+'</p><p style="font-weight:800;margin-top:10px">'+esc(res.orderNumber||"")+'</p></div>'; cart={}; syncFab(); })
-        .catch(function(){ btn.disabled=false; alert(tt.fail); });
+        .catch(function(){ btn.disabled=false; showErr(tt.fail); });
       return;
     }
     var lines=[tt.waHi+" *"+D().restaurant.name+"*:",""];
@@ -297,13 +395,21 @@ export function renderStorefront(bundle: StorefrontBundle): string {
     lines.push("",tt.waTotal+": "+fmt(total()),tt.waType+": "+(otype==="delivery"?tt.delivery:tt.pickup));
     if(D().branches.length>1) lines.push(tt.waBranch+": "+b.name);
     lines.push(tt.waName+": "+name,tt.waPhone+": "+phone); if(otype==="delivery"&&addr) lines.push(tt.waAddr+": "+addr); if(note) lines.push(tt.waNote+": "+note);
-    var wa=b.whatsapp||""; if(!wa){ alert(tt.fail); return; }
+    var wa=b.whatsapp||""; if(!wa){ showErr(tt.fail); return; }
     window.open("https://wa.me/"+wa+"?text="+encodeURIComponent(lines.join("\\n")),"_blank","noopener");
   }
   var scrim=id("scrim"), drawer=id("drawer");
   function openCart(){ renderCart(); scrim.classList.add("open"); drawer.classList.add("open"); }
   function closeCart(){ scrim.classList.remove("open"); drawer.classList.remove("open"); }
   id("cartfab").addEventListener("click",openCart); id("closeCart").addEventListener("click",closeCart); scrim.addEventListener("click",closeCart);
+  document.addEventListener("keydown",function(e){ if(e.key==="Escape"&&drawer.classList.contains("open")) closeCart(); });
+  var qbox=id("q"), qtimer=null;
+  qbox.addEventListener("input",function(){
+    id("qclear").hidden=!qbox.value;
+    clearTimeout(qtimer);
+    qtimer=setTimeout(function(){ query=qbox.value.trim(); renderMenu(); },160);
+  });
+  id("qclear").addEventListener("click",function(){ qbox.value=""; id("qclear").hidden=true; query=""; renderMenu(); qbox.focus(); });
   id("langbtn").addEventListener("click",function(){ lang=lang==="ar"?"fr":"ar"; render(); });
   window.addEventListener("scroll",function(){ id("topbar").classList.toggle("solid",window.scrollY>60); },{passive:true});
   render(); syncFab();

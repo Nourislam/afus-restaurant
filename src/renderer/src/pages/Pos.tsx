@@ -433,7 +433,7 @@ export default function PosPage() {
                 />
               </Card>
             ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-4">
+              <div className="fit-grid-sm grid gap-3">
                 {activeProducts.map((product) => (
                   <button
                     key={product.id}

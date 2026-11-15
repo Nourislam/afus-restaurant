@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { clsx } from 'clsx'
 import {
   BarChart3,
@@ -7,47 +7,59 @@ import {
   BookOpen,
   CalendarClock,
   ChefHat,
-  ChevronDown,
   Flame,
   Globe,
+  KeyRound,
   LayoutDashboard,
   Lightbulb,
-  Package,
-  Truck,
-  Users,
-  Wallet,
-  LogOut,
-  Menu as MenuIcon,
   Moon,
+  Package,
   ReceiptText,
-  Settings as SettingsIcon,
   ShieldCheck,
   ShoppingCart,
   Sun,
+  Truck,
+  Users,
   UtensilsCrossed,
-  X,
-  type LucideIcon
+  Wallet
 } from 'lucide-react'
-import type { Permission } from '@shared/permissions'
 import { api } from '../lib/api'
 import { useAppStore } from '../store/app'
-import { localized, useT } from '../i18n'
-import { formatDate, todayString } from '../lib/format'
-import { AfusBrand, AfusMark } from './AfusLogo'
+import { useT } from '../i18n'
+import { AfusMark } from './AfusLogo'
+import { TitleBar } from './TitleBar'
+import { Sidebar, type NavItem } from './Sidebar'
+import { ErrorBoundary } from './ErrorBoundary'
 import { Button, Field, Input, Modal, Spinner } from './ui'
 
-interface NavItem {
-  to: string
+/** One 28px icon button in the window bar. */
+function BarButton({
+  label,
+  onClick,
+  active,
+  children
+}: {
   label: string
-  icon: LucideIcon
-  permission?: Permission | Permission[]
-  exact?: boolean
-}
-
-function canSee(permissions: readonly string[], required?: Permission | Permission[]): boolean {
-  if (!required) return true
-  const list = Array.isArray(required) ? required : [required]
-  return list.some((permission) => permissions.includes(permission))
+  onClick: () => void
+  active?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className={clsx(
+        'inline-flex h-7 min-w-[1.75rem] items-center justify-center gap-1 rounded-md px-1.5 text-[11px] font-bold transition-colors',
+        active
+          ? 'bg-brand-600/15 text-brand-700 dark:text-brand-300'
+          : 'text-ink-500 hover:bg-ink-200/70 hover:text-ink-800 dark:text-ink-400 dark:hover:bg-ink-800 dark:hover:text-ink-100'
+      )}
+    >
+      {children}
+    </button>
+  )
 }
 
 export function AppShell() {
@@ -55,59 +67,18 @@ export function AppShell() {
   const user = useAppStore((state) => state.user)
   const settings = useAppStore((state) => state.settings)
   const reset = useAppStore((state) => state.reset)
-  const languageStore = useAppStore((state) => state.language)
   const setLanguage = useAppStore((state) => state.setLanguage)
   const theme = useAppStore((state) => state.theme)
   const setTheme = useAppStore((state) => state.setTheme)
   const setSettings = useAppStore((state) => state.setSettings)
   const navigate = useNavigate()
   const location = useLocation()
-  const [mobileOpen, setMobileOpen] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [passwordOpen, setPasswordOpen] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
+  const [pinOpen, setPinOpen] = useState(false)
 
   const permissions = user?.permissions ?? []
   const canManage = permissions.includes('settings.manage')
-  /* Simple mode (Afus parity): floor staff see only the operational screens, not
-     the management/settings sections. Managers always see everything. */
+  /* Simple mode (Afus parity): floor staff see only the operational screens. */
   const simpleMode = settings?.uiMode === 'simple' && !canManage
-
-  const toggleUiMode = async () => {
-    const next = settings?.uiMode === 'simple' ? 'full' : 'simple'
-    try {
-      const updated = await api.updateSettings({ uiMode: next })
-      setSettings(updated)
-    } catch {
-      /* ignore */
-    }
-  }
-  const operations: NavItem[] = [
-    { to: '/', label: t('nav.dashboard'), icon: LayoutDashboard, permission: 'dashboard.view', exact: true },
-    { to: '/pos', label: t('nav.pos'), icon: ShoppingCart, permission: 'pos.use' },
-    { to: '/tables', label: t('nav.tables'), icon: UtensilsCrossed, permission: ['tables.manage', 'pos.use'] },
-    { to: '/kitchen', label: t('nav.kitchen'), icon: Flame, permission: 'kitchen.view' },
-    { to: '/orders', label: t('nav.orders'), icon: ReceiptText, permission: 'orders.view' },
-    { to: '/reservations', label: t('nav.reservations'), icon: CalendarClock, permission: 'reservations.manage' },
-    { to: '/delivery', label: t('nav.delivery'), icon: Bike, permission: 'delivery.manage' }
-  ]
-  const management: NavItem[] = [
-    { to: '/menu', label: t('nav.menu'), icon: BookOpen, permission: 'menu.view' },
-    { to: '/recipes', label: t('nav.recipes'), icon: ChefHat, permission: 'recipes.view' },
-    { to: '/inventory', label: t('nav.inventory'), icon: Package, permission: 'inventory.view' },
-    { to: '/purchases', label: t('nav.purchases'), icon: Truck, permission: 'purchases.view' },
-    { to: '/customers', label: t('nav.customers'), icon: Users, permission: 'customers.manage' },
-    { to: '/website', label: t('web.nav'), icon: Globe, permission: 'settings.manage' },
-    { to: '/employees', label: t('nav.employees'), icon: ShieldCheck, permission: 'employees.manage' }
-  ]
-  const insights: NavItem[] = [
-    { to: '/finance', label: t('nav.finance'), icon: Wallet, permission: 'finance.view' },
-    { to: '/reports', label: t('nav.reports'), icon: BarChart3, permission: 'reports.view' },
-    { to: '/insight', label: t('nav.insight'), icon: Lightbulb, permission: 'insight.view' }
-  ]
-  const system: NavItem[] = [
-    { to: '/settings', label: t('nav.settings'), icon: SettingsIcon, permission: 'settings.manage' }
-  ]
 
   useEffect(() => {
     document.documentElement.lang = language
@@ -115,13 +86,14 @@ export function AppShell() {
     document.documentElement.classList.toggle('dark', theme === 'dark')
   }, [language, theme])
 
-  useEffect(() => {
-    const onClick = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) setMenuOpen(false)
+  const toggleUiMode = async () => {
+    const next = settings?.uiMode === 'simple' ? 'full' : 'simple'
+    try {
+      setSettings(await api.updateSettings({ uiMode: next }))
+    } catch {
+      /* the switch stays as it was */
     }
-    document.addEventListener('mousedown', onClick)
-    return () => document.removeEventListener('mousedown', onClick)
-  }, [])
+  }
 
   const handleLogout = async () => {
     try {
@@ -132,186 +104,82 @@ export function AppShell() {
     }
   }
 
-  const renderSection = (title: string, items: NavItem[]) => {
-    const visible = items.filter((item) => canSee(permissions, item.permission))
-    if (visible.length === 0) return null
-    return (
-      <div className="mb-5">
-        <p className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/40">{title}</p>
-        <nav className="space-y-0.5">
-          {visible.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.exact}
-              onClick={() => setMobileOpen(false)}
-              className={({ isActive }) =>
-                clsx(
-                  'group/nav relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all duration-150',
-                  isActive
-                    ? 'bg-brand-700/18 font-semibold text-white'
-                    : 'text-white/60 hover:bg-white/[0.07] hover:text-white'
-                )
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <span
-                    className={clsx(
-                      'absolute inset-y-1.5 start-0 w-1 rounded-full bg-brand-600 transition-all duration-200',
-                      isActive ? 'opacity-100' : 'opacity-0 group-hover/nav:opacity-40'
-                    )}
-                  />
-                  <item.icon
-                    className={clsx(
-                      'h-4 w-4 shrink-0 transition-colors',
-                      isActive ? 'text-brand-300' : 'opacity-80 group-hover/nav:opacity-100'
-                    )}
-                  />
-                  <span className="truncate">{item.label}</span>
-                </>
-              )}
-            </NavLink>
-          ))}
-        </nav>
-      </div>
-    )
-  }
+  /* The service floor first, then the back office, then the figures. Groups are
+     split by hairlines in the menu, so no label eats a line. */
+  const service: NavItem[] = [
+    { to: '/', label: t('nav.dashboard'), icon: LayoutDashboard, permission: 'dashboard.view', exact: true },
+    { to: '/pos', label: t('nav.pos'), icon: ShoppingCart, permission: 'pos.use' },
+    { to: '/tables', label: t('nav.tables'), icon: UtensilsCrossed, permission: ['tables.manage', 'pos.use'] },
+    { to: '/kitchen', label: t('nav.kitchen'), icon: Flame, permission: 'kitchen.view' },
+    { to: '/orders', label: t('nav.orders'), icon: ReceiptText, permission: 'orders.view' },
+    { to: '/reservations', label: t('nav.reservations'), icon: CalendarClock, permission: 'reservations.manage' },
+    { to: '/delivery', label: t('nav.delivery'), icon: Bike, permission: 'delivery.manage' }
+  ]
+  const backOffice: NavItem[] = [
+    { to: '/menu', label: t('nav.menu'), icon: BookOpen, permission: 'menu.view' },
+    { to: '/recipes', label: t('nav.recipes'), icon: ChefHat, permission: 'recipes.view' },
+    { to: '/inventory', label: t('nav.inventory'), icon: Package, permission: 'inventory.view' },
+    { to: '/purchases', label: t('nav.purchases'), icon: Truck, permission: 'purchases.view' },
+    { to: '/customers', label: t('nav.customers'), icon: Users, permission: 'customers.manage' },
+    { to: '/website', label: t('web.nav'), icon: Globe, permission: 'settings.manage' },
+    { to: '/employees', label: t('nav.employees'), icon: ShieldCheck, permission: 'employees.manage' }
+  ]
+  const figures: NavItem[] = [
+    { to: '/finance', label: t('nav.finance'), icon: Wallet, permission: 'finance.view' },
+    { to: '/reports', label: t('nav.reports'), icon: BarChart3, permission: 'reports.view' },
+    { to: '/insight', label: t('nav.insight'), icon: Lightbulb, permission: 'insight.view' }
+  ]
+  const groups = simpleMode ? [service] : [service, backOffice, figures]
 
   return (
-    <div className="flex h-full">
-      <aside
-        className={clsx(
-          'fixed inset-y-0 z-40 flex w-64 flex-col border-e border-white/5 bg-ink-950 text-white transition-transform lg:static lg:translate-x-0',
-          'before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-40 before:bg-[radial-gradient(120%_80%_at_50%_0%,rgba(99,102,241,0.14),transparent)]',
-          language === 'ar' ? 'right-0' : 'left-0',
-          mobileOpen ? 'translate-x-0' : language === 'ar' ? 'translate-x-full' : '-translate-x-full'
-        )}
-      >
-        <div className="relative flex items-center gap-3 px-4 py-5 titlebar-drag">
-          <AfusBrand name={settings?.restaurantName || t('app.name')} subtitle={t('app.tagline')} tone="dark" size="sm" className="flex-1 titlebar-no-drag" />
-          <button className="rounded p-1 text-white/60 titlebar-no-drag lg:hidden" onClick={() => setMobileOpen(false)}>
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="flex-1 px-2 pb-4">
-          {renderSection(t('nav.operations'), operations)}
-          {simpleMode ? null : renderSection(t('nav.management'), management)}
-          {simpleMode ? null : renderSection(t('nav.insights'), insights)}
-          {simpleMode ? null : renderSection(t('nav.settings'), system)}
-        </div>
-
-        <div className="border-t border-white/10 px-4 py-3">
-          <p className="flex items-center gap-1.5 text-[11px] text-white/60">
-            <span className="h-1.5 w-1.5 rounded-full bg-accent-500" />
-            {t('app.offline')}
-          </p>
-          <p className="mt-1 text-[10px] text-white/35">v1.0 · AFUS</p>
-        </div>
-      </aside>
-
-      {mobileOpen ? <div className="fixed inset-0 z-30 bg-ink-950/50 lg:hidden" onClick={() => setMobileOpen(false)} /> : null}
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="titlebar-drag flex h-14 shrink-0 items-center gap-2 border-b border-ink-200 bg-white/90 px-4 backdrop-blur dark:border-ink-800 dark:bg-ink-900/80">
-          <button
-            className="titlebar-no-drag rounded-lg p-2 text-ink-500 hover:bg-ink-100 dark:hover:bg-ink-800 lg:hidden"
-            onClick={() => setMobileOpen(true)}
+    <div className="flex h-full w-full flex-col overflow-hidden bg-ink-100 dark:bg-ink-950">
+      <TitleBar>
+        {canManage ? (
+          <BarButton
+            label={settings?.uiMode === 'simple' ? t('mode.full') : t('mode.simple')}
+            onClick={() => void toggleUiMode()}
+            active={settings?.uiMode === 'simple'}
           >
-            <MenuIcon className="h-5 w-5" />
-          </button>
+            {settings?.uiMode === 'simple' ? t('mode.simple') : t('mode.full')}
+          </BarButton>
+        ) : null}
+        <BarButton label={t('setup.language')} onClick={() => setLanguage(language === 'ar' ? 'fr' : 'ar')}>
+          {language === 'ar' ? 'FR' : 'ع'}
+        </BarButton>
+        <BarButton label={t('settings.theme')} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+          {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+        </BarButton>
+        <BarButton label={t('auth.changePin')} onClick={() => setPinOpen(true)}>
+          <KeyRound className="h-3.5 w-3.5" />
+        </BarButton>
+      </TitleBar>
 
-          <div className="hidden items-center gap-2 text-xs text-ink-400 sm:flex">
-            <span className="font-medium text-ink-600 dark:text-ink-300">{formatDate(todayString())}</span>
-            <span>·</span>
-            <span>{new Date().toLocaleTimeString(language === 'ar' ? 'ar-DZ' : 'fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
-          </div>
-
-          <div className="titlebar-no-drag ms-auto flex items-center gap-1.5">
-            {canManage ? (
-              <button
-                onClick={() => void toggleUiMode()}
-                className={clsx(
-                  'rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition',
-                  settings?.uiMode === 'simple'
-                    ? 'border-brand-600/40 bg-brand-600/10 text-brand-700 dark:text-brand-300'
-                    : 'border-ink-200 text-ink-600 hover:bg-ink-50 dark:border-ink-700 dark:text-ink-300 dark:hover:bg-ink-800'
-                )}
-                title={settings?.uiMode === 'simple' ? t('mode.full') : t('mode.simple')}
-              >
-                {settings?.uiMode === 'simple' ? t('mode.simple') : t('mode.full')}
-              </button>
-            ) : null}
-            <button
-              onClick={() => setLanguage(languageStore === 'ar' ? 'fr' : 'ar')}
-              className="rounded-lg border border-ink-200 px-2.5 py-1.5 text-xs font-bold text-ink-600 transition hover:bg-ink-50 dark:border-ink-700 dark:text-ink-300 dark:hover:bg-ink-800"
-              title={t('setup.language')}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <Sidebar
+          groups={groups}
+          onLogout={() => void handleLogout()}
+          footer={<p className="px-2.5 pt-1 text-[10px] text-white/30">v1.0 · AFUS</p>}
+        />
+        {/* The screen owns its own scrolling: the window never scrolls. */}
+        <main className="page relative min-w-0 flex-1">
+          <div key={location.pathname} className="page-body fade-in">
+            {/* A fault on one screen must not blank the whole program. */}
+            <ErrorBoundary
+              resetKey={location.pathname}
+              labels={{ title: t('errors.screenTitle'), hint: t('errors.screenHint'), retry: t('common.retry') }}
             >
-              {languageStore === 'ar' ? 'FR' : 'ع'}
-            </button>
-            <button
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className="rounded-lg p-2 text-ink-500 transition hover:bg-ink-100 dark:text-ink-300 dark:hover:bg-ink-800"
-              title={t('settings.theme')}
-            >
-              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </button>
-
-            <div className="relative" ref={menuRef}>
-              <button
-                onClick={() => setMenuOpen((value) => !value)}
-                className="flex items-center gap-2 rounded-lg border border-ink-200 px-2 py-1.5 transition hover:bg-ink-50 dark:border-ink-700 dark:hover:bg-ink-800"
-              >
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-700 text-[10px] font-bold text-white">
-                  {user?.fullName?.slice(0, 2).toUpperCase()}
-                </span>
-                <span className="hidden text-start sm:block">
-                  <span className="block max-w-[120px] truncate text-xs font-semibold text-ink-700 dark:text-ink-200">
-                    {user?.fullName}
-                  </span>
-                  <span className="block text-[10px] text-ink-400">{user ? localized(language, user.roleLabel) : ''}</span>
-                </span>
-                <ChevronDown className="h-3.5 w-3.5 text-ink-400" />
-              </button>
-              {menuOpen ? (
-                <div className="absolute end-0 z-40 mt-1 w-52 rounded-lg border border-ink-200 bg-white p-1 shadow-lg dark:border-ink-700 dark:bg-ink-900">
-                  <button
-                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-xs text-ink-600 hover:bg-ink-50 dark:text-ink-300 dark:hover:bg-ink-800"
-                    onClick={() => {
-                      setPasswordOpen(true)
-                      setMenuOpen(false)
-                    }}
-                  >
-                    <SettingsIcon className="h-3.5 w-3.5" />
-                    {t('auth.changePin')}
-                  </button>
-                  <button
-                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-xs text-ink-600 hover:bg-ink-50 dark:text-ink-300 dark:hover:bg-ink-800"
-                    onClick={handleLogout}
-                  >
-                    <LogOut className="h-3.5 w-3.5" />
-                    {t('auth.logout')}
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </header>
-
-        <main className="min-h-0 flex-1 overflow-y-auto p-4 lg:p-6">
-          <div key={location.pathname} className="animate-fade-in">
-            <Outlet />
+              <Outlet />
+            </ErrorBoundary>
           </div>
         </main>
       </div>
 
-      <ChangePasswordModal open={passwordOpen} onClose={() => setPasswordOpen(false)} />
+      <ChangePinModal open={pinOpen} onClose={() => setPinOpen(false)} />
     </div>
   )
 }
 
-function ChangePasswordModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+function ChangePinModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useT()
   const [currentPin, setCurrentPin] = useState('')
   const [newPin, setNewPin] = useState('')
@@ -364,7 +232,7 @@ function ChangePasswordModal({ open, onClose }: { open: boolean; onClose: () => 
           <Button variant="secondary" onClick={onClose}>
             {t('common.cancel')}
           </Button>
-          <Button onClick={submit} loading={busy}>
+          <Button onClick={() => void submit()} loading={busy}>
             {t('common.save')}
           </Button>
         </>
@@ -389,13 +257,16 @@ function ChangePasswordModal({ open, onClose }: { open: boolean; onClose: () => 
 
 export function SplashScreen({ message }: { message?: string }) {
   return (
-    <div className="flex h-full items-center justify-center bg-ink-950 text-white">
-      <div className="flex flex-col items-center gap-4">
-        <AfusMark className="h-14 w-14 rounded-2xl shadow-lg" />
-        <p className="text-sm font-semibold tracking-wide">AFUS Restaurant</p>
-        <div className="flex items-center gap-2 text-xs text-white/60">
-          <Spinner size="sm" />
-          {message ?? '…'}
+    <div className="flex h-full flex-col bg-ink-100 dark:bg-ink-950">
+      <TitleBar bare />
+      <div className="flex flex-1 items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <AfusMark className="h-14 w-14 rounded-2xl shadow-lg" />
+          <p className="text-sm font-semibold tracking-wide text-ink-700 dark:text-ink-200">AFUS Restaurant</p>
+          <div className="flex items-center gap-2 text-xs text-ink-400">
+            <Spinner size="sm" />
+            {message ?? '…'}
+          </div>
         </div>
       </div>
     </div>

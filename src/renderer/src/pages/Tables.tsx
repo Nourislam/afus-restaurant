@@ -200,7 +200,7 @@ export default function TablesPage() {
                 </h2>
                 <span className="text-[11px] text-slate-400">{areaTables.length}</span>
               </div>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
+              <div className="fit-grid-sm grid gap-3">
                 {areaTables.map((table, index) => {
                   const style = STATUS_STYLES[table.status as TableStatus]
                   return (

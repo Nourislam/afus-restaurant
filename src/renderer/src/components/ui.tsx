@@ -9,7 +9,7 @@ export function Card({ className, children }: { className?: string; children: Re
   return (
     <div
       className={clsx(
-        'rounded-xl border border-slate-200/80 bg-white shadow-card dark:border-slate-800 dark:bg-slate-900',
+        'rounded-xl border border-ink-200/80 bg-white shadow-card dark:border-ink-800 dark:bg-ink-900',
         className
       )}
     >
@@ -18,22 +18,60 @@ export function Card({ className, children }: { className?: string; children: Re
   )
 }
 
+/**
+ * The row at the top of every screen (Afus Boutique parity): the page's name,
+ * then its own tabs or filters, then its buttons at the end — all on one 40px
+ * line that stays pinned while the screen below it scrolls. The negative
+ * margins let it bleed to the edges of the padded `.page-body` it lives in.
+ * `hero` (the dashboard) keeps the tall header with an icon and a subtitle.
+ */
 export function PageHeader({
   title,
   subtitle,
-  actions
+  actions,
+  icon: Icon,
+  children,
+  hero
 }: {
   title: string
   subtitle?: string
   actions?: ReactNode
+  icon?: LucideIcon
+  children?: ReactNode
+  hero?: boolean
 }) {
-  return (
-    <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h1 className="text-xl font-bold text-slate-900 dark:text-white">{title}</h1>
-        {subtitle ? <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{subtitle}</p> : null}
+  if (hero) {
+    return (
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          {Icon ? (
+            <span className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-brand-600/15 text-brand-700 dark:text-brand-300">
+              <Icon className="h-5 w-5" />
+            </span>
+          ) : null}
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-bold text-ink-900 dark:text-white">{title}</h1>
+            {subtitle ? <p className="truncate text-sm text-ink-500 dark:text-ink-400">{subtitle}</p> : null}
+          </div>
+        </div>
+        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
-      {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+    )
+  }
+  return (
+    <div className="sticky top-0 z-20 -mx-4 -mt-3.5 mb-3.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-ink-200 bg-ink-100/95 px-4 py-2 backdrop-blur lg:-mx-5 lg:px-5 dark:border-ink-800 dark:bg-ink-950/95">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <h1 className="flex-none truncate text-sm font-bold text-ink-900 dark:text-white" title={subtitle}>
+          {title}
+        </h1>
+        {subtitle ? (
+          <span className="hidden min-w-0 flex-none truncate text-xs text-ink-400 xl:inline dark:text-ink-500">
+            {subtitle}
+          </span>
+        ) : null}
+        {children ? <div className="min-w-0 flex-1">{children}</div> : null}
+      </div>
+      {actions ? <div className="ms-auto flex flex-wrap items-center justify-end gap-2">{actions}</div> : null}
     </div>
   )
 }
@@ -370,29 +408,25 @@ export function Tabs<T extends string>({
   value,
   onChange
 }: {
-  items: { value: T; label: string; count?: number }[]
+  items: { value: T; label: string; count?: number; icon?: LucideIcon }[]
   value: T
   onChange: (value: T) => void
 }) {
+  /* Always one line: the rail scrolls sideways without a visible bar rather than
+     wrapping onto a second line and pushing the screen down. */
   return (
-    <div className="flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-800/70">
+    <div className="segmented no-scrollbar overflow-x-auto" role="tablist">
       {items.map((item) => (
         <button
           key={item.value}
+          role="tab"
+          aria-selected={value === item.value}
           onClick={() => onChange(item.value)}
-          className={clsx(
-            'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition',
-            value === item.value
-              ? 'bg-white text-brand-800 shadow-sm dark:bg-slate-900 dark:text-white'
-              : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
-          )}
+          className={clsx('flex flex-none items-center gap-1.5', value === item.value && 'active')}
         >
+          {item.icon ? <item.icon className="h-4 w-4 flex-none" /> : null}
           {item.label}
-          {item.count !== undefined ? (
-            <span className="rounded-full bg-slate-200 px-1.5 text-[10px] text-slate-600 dark:bg-slate-700 dark:text-slate-300">
-              {item.count}
-            </span>
-          ) : null}
+          {item.count !== undefined ? <span className="num text-xs text-ink-400">{item.count}</span> : null}
         </button>
       ))}
     </div>
@@ -428,8 +462,10 @@ export function DataTable<T>({
 }) {
   if (loading) return <Loading />
   if (rows.length === 0) return <>{empty ?? <EmptyState title="—" />}</>
+  /* The table scrolls inside its own box with a pinned header, so the screen's
+     toolbar and totals never scroll away with it. */
   return (
-    <div className="overflow-x-auto">
+    <div className="max-h-full overflow-auto">
       <table className="afus-table w-full">
         <thead>
           <tr>
@@ -473,7 +509,9 @@ export function DataTable<T>({
             </tr>
           ))}
         </tbody>
-        {footer ? <tfoot className="bg-slate-50 font-semibold dark:bg-slate-800/60">{footer}</tfoot> : null}
+        {footer ? (
+          <tfoot className="sticky bottom-0 bg-ink-50 font-semibold dark:bg-ink-900">{footer}</tfoot>
+        ) : null}
       </table>
     </div>
   )

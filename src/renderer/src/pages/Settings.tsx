@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
-import { CalendarCheck, DatabaseBackup, Download, FileCheck2, FolderOpen, Printer, RotateCcw, Save, ShieldCheck, Trash2 } from 'lucide-react'
+import { CalendarCheck, DatabaseBackup, Download, FileCheck2, FolderOpen, Printer, ReceiptText, RotateCcw, Save, ShieldCheck, Store, Trash2 } from 'lucide-react'
 import type { AppSettings, BackupFile, FiscalClosure, IntegrityReport, StampBracket } from '@shared/types'
 import { PAYMENT_METHOD_LABELS } from '@shared/constants'
 import { api } from '../lib/api'
 import { formatDateTime, formatMoney } from '../lib/format'
 import { useT } from '../i18n'
 import { useAppStore } from '../store/app'
-import { Badge, Button, Card, Confirm, ErrorBox, Field, Input, PageHeader, Select, Spinner, Toggle } from '../components/ui'
+import { Badge, Button, Card, Confirm, ErrorBox, Field, Input, PageHeader, Select, Spinner, Tabs, Toggle } from '../components/ui'
+
+type SettingsTab = 'shop' | 'receipt' | 'fiscal' | 'backup'
 
 const todayKey = () => new Date().toISOString().slice(0, 10)
 const daToCents = (value: string) => Math.max(0, Math.round(Number(value || '0') * 100))
@@ -22,6 +24,8 @@ export default function Settings() {
   const [busy, setBusy] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /* Four tabs instead of one long scroll: each one fits a screen. */
+  const [tab, setTab] = useState<SettingsTab>('shop')
 
   // Fiscal pack state
   const [report, setReport] = useState<IntegrityReport | null>(null)
@@ -146,13 +150,25 @@ export default function Settings() {
     <section className="space-y-4">
       <PageHeader
         title={t('nav.settings')}
-        subtitle={t('app.tagline')}
         actions={
-          <Button icon={Save} loading={busy} onClick={() => void save()}>
-            {t('common.save')}
-          </Button>
+          tab === 'backup' ? undefined : (
+            <Button icon={Save} loading={busy} onClick={() => void save()}>
+              {t('common.save')}
+            </Button>
+          )
         }
-      />
+      >
+        <Tabs<SettingsTab>
+          value={tab}
+          onChange={setTab}
+          items={[
+            { value: 'shop', label: t('setup.restaurant'), icon: Store },
+            { value: 'receipt', label: t('settings.receiptTab'), icon: ReceiptText },
+            { value: 'fiscal', label: t('fiscal.title'), icon: ShieldCheck },
+            { value: 'backup', label: t('backup.title'), icon: DatabaseBackup }
+          ]}
+        />
+      </PageHeader>
 
       {error ? <ErrorBox code={error} /> : null}
       {saved ? (
@@ -161,7 +177,8 @@ export default function Settings() {
         </p>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      {tab === 'shop' ? (
+      <div className="max-w-3xl">
         <Card className="space-y-4 p-5">
           <h2 className="text-sm font-bold text-ink-800 dark:text-ink-100">{t('setup.restaurant')}</h2>
           <Field label={t('settings.restaurantName')} required>
@@ -186,7 +203,11 @@ export default function Settings() {
             </Select>
           </Field>
         </Card>
+      </div>
+      ) : null}
 
+      {tab === 'receipt' ? (
+      <div className="max-w-3xl">
         <Card className="space-y-4 p-5">
           <h2 className="text-sm font-bold text-ink-800 dark:text-ink-100">{t('settings.taxEnabled')}</h2>
           <label className="flex items-start gap-3">
@@ -279,17 +300,13 @@ export default function Settings() {
           </div>
         </Card>
       </div>
+      ) : null}
 
       {/* ───────── Fiscal compliance pack ───────── */}
-      <div className="space-y-1 pt-2">
-        <h2 className="flex items-center gap-2 text-base font-bold text-ink-900 dark:text-ink-50">
-          <ShieldCheck className="h-5 w-5 text-brand-700" aria-hidden />
-          {t('fiscal.title')}
-        </h2>
+      {tab === 'fiscal' ? (
+      <div className="space-y-3">
         <p className="text-xs text-ink-500">{t('fiscal.subtitle')}</p>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
         <Card className="space-y-4 p-5">
           <h3 className="text-sm font-bold text-ink-800 dark:text-ink-100">{t('fiscal.identity')}</h3>
           <Field label={t('fiscal.legalName')}>
@@ -464,8 +481,11 @@ export default function Settings() {
             </Button>
           </div>
         </Card>
+        </div>
       </div>
+      ) : null}
 
+      {tab === 'backup' ? (
       <Card className="space-y-4 p-5">
         <div>
           <h2 className="flex items-center gap-2 text-sm font-bold text-ink-800 dark:text-ink-100">
@@ -515,6 +535,7 @@ export default function Settings() {
           <p className="text-xs text-ink-400">{t('common.noData')}</p>
         )}
       </Card>
+      ) : null}
 
       <Confirm
         open={Boolean(restoreTarget)}

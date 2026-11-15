@@ -1,4 +1,5 @@
-import { ArrowUpRight, ClipboardList, PackageX, Receipt, TrendingUp, Wallet } from 'lucide-react'
+import {
+  LayoutDashboard, ArrowUpRight, ClipboardList, PackageX, Receipt, TrendingUp, Wallet } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../store/app'
 import { useApi } from '../lib/hooks'
@@ -18,6 +19,8 @@ export default function Dashboard() {
   return (
     <section className="space-y-5">
       <PageHeader
+        hero
+        icon={LayoutDashboard}
         title={t('dashboard.title')}
         subtitle={t('dashboard.subtitle')}
         actions={

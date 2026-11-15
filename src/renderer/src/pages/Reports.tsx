@@ -94,7 +94,7 @@ export default function Reports() {
           <Loading />
         ) : report.error ? (
           <ErrorBox code={report.error} onRetry={() => void report.reload()} />
-        ) : !table || table.rows.length === 0 ? (
+        ) : !table || !Array.isArray(table.rows) || table.rows.length === 0 ? (
           <EmptyState icon={BarChart3} title={t('common.noData')} />
         ) : (
           <div className="overflow-x-auto">

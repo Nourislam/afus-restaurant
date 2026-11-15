@@ -17,6 +17,10 @@
   body,
   #root {
     height: 100%;
+    width: 100%;
+    /* The window itself never scrolls (Afus Boutique parity): every screen is a
+       `.page` whose `.page-body` is the only scroller. */
+    overflow: hidden;
   }
 
   body {
@@ -98,6 +102,98 @@
   .afus-scroll {
     @apply overflow-y-auto;
   }
+
+  /* ---------- Page frame (Afus Boutique parity) ---------- */
+  /* Every screen fills the window exactly once; nothing outside `.page-body`
+     can scroll, so the toolbar and totals never leave the view. */
+  .page {
+    @apply flex h-full min-h-0 flex-col overflow-hidden;
+  }
+
+  .page-body {
+    @apply min-h-0 flex-1 overflow-y-auto px-4 py-3.5 lg:px-5;
+  }
+
+  /* A body that must not scroll at all (board-style screens: tables, kitchen):
+     its children divide the height instead. */
+  .page-fill {
+    @apply flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-3.5 lg:px-5;
+  }
+
+  /* The one 40px line at the top of a screen: title, then the page's own tabs
+     or filters, then its buttons at the end. */
+  .toolbar {
+    @apply flex flex-none flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-ink-200 px-4 py-2 lg:px-5 dark:border-ink-800;
+  }
+
+  /* ---------- Menu entry ---------- */
+  .sidebar-item {
+    @apply relative flex min-h-[2.375rem] cursor-pointer items-center gap-2.5 rounded-lg px-2.5 text-sm font-medium leading-tight text-white/60 transition-colors duration-150 hover:bg-white/[0.07] hover:text-white;
+  }
+
+  /* Short screens (1024 x 720, or a laptop with a dock): every entry still fits
+     without the menu scrolling. */
+  @media (max-height: 860px) {
+    .sidebar-item {
+      @apply min-h-[2.125rem];
+    }
+  }
+
+  @media (max-height: 760px) {
+    .sidebar-item {
+      @apply min-h-[1.9375rem] text-[13px];
+    }
+  }
+
+  .sidebar-item.active {
+    @apply bg-brand-600/15 font-semibold text-white;
+  }
+
+  .sidebar-item.active svg {
+    @apply text-brand-300;
+  }
+
+  /* ---------- Segmented tabs ---------- */
+  /* Always one line, 32px inside a 40px rail, like the buttons beside it. */
+  .segmented {
+    @apply inline-flex max-w-full flex-nowrap items-center gap-1 rounded-lg border border-ink-200 bg-ink-100/80 p-[3px] dark:border-ink-800 dark:bg-ink-900/70;
+  }
+
+  .segmented > button {
+    @apply h-8 whitespace-nowrap rounded-md px-3 text-sm font-medium text-ink-500 transition-colors hover:text-ink-800 dark:text-ink-400 dark:hover:text-ink-100;
+  }
+
+  .segmented > button.active {
+    @apply bg-white text-ink-900 shadow-sm dark:bg-ink-800 dark:text-white;
+  }
+
+  /* ---------- Grids that follow the room they really have ---------- */
+  .fit-grid-sm {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
+  }
+
+  .fit-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+  }
+
+  .fit-grid-lg {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  }
+}
+
+/* A thin bar where a list may scroll (the menu on a short screen) */
+.thin-scroll::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+/* Horizontal strips (category chips, tab rails) scroll without a visible bar */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
 }
 
 /* Numbers line up in tables and totals */
