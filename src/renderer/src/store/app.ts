@@ -17,6 +17,21 @@ function storedTheme(): 'light' | 'dark' {
   return localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark'
 }
 
+/**
+ * Put the theme on the document itself, not inside one screen: the login and
+ * setup screens live outside the shell, and before this they stayed light
+ * whatever the owner had chosen. `color-scheme` also lets the native
+ * scrollbars and form controls follow along.
+ */
+function applyTheme(theme: 'light' | 'dark'): void {
+  if (typeof document === 'undefined') return
+  document.documentElement.classList.toggle('dark', theme === 'dark')
+  document.documentElement.style.colorScheme = theme
+}
+
+/* The very first paint is already in the right theme. */
+applyTheme(storedTheme())
+
 interface AppState {
   user: UserSession | null
   settings: AppSettings | null
@@ -46,6 +61,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   setTheme: (theme) => {
     localStorage.setItem(THEME_KEY, theme)
+    applyTheme(theme)
     set({ theme })
   },
   setBooting: (booting) => set({ booting }),

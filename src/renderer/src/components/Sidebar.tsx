@@ -58,7 +58,7 @@ function useTooltip(enabled: boolean) {
     createPortal(
       <div
         role="tooltip"
-        className="pointer-events-none fixed z-[120] whitespace-nowrap rounded-md border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-lg"
+        className="pointer-events-none fixed z-[120] whitespace-nowrap rounded-md border border-ink-800 bg-ink-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-lg dark:border-ink-700"
         style={{ top: tip.top, left: tip.x, transform: `translate(${tip.rtl ? '-100%' : '0'}, -50%)` }}
       >
         {tip.text}
@@ -141,7 +141,8 @@ export function Sidebar({
   return (
     <aside
       className={clsx(
-        'relative flex flex-none flex-col border-e border-white/5 bg-ink-950 text-white transition-[width] duration-200',
+        'relative flex flex-none flex-col border-e transition-[width] duration-200',
+        'border-ink-200 bg-white text-ink-800 dark:border-white/5 dark:bg-ink-950 dark:text-white',
         collapsed ? 'w-16' : 'w-60'
       )}
     >
@@ -154,20 +155,20 @@ export function Sidebar({
         aria-label={`${who} · ${collapsed ? t('nav.expand') : t('nav.collapse')}`}
         title={collapsed ? undefined : t('nav.collapse')}
         data-testid="sidebar-toggle"
-        className="flex flex-none items-center gap-2.5 border-b border-white/10 px-3 py-2.5 text-start transition-colors hover:bg-white/[0.06]"
+        className="flex flex-none items-center gap-2.5 border-b border-ink-200 px-3 py-2.5 text-start transition-colors hover:bg-ink-100 dark:border-white/10 dark:hover:bg-white/[0.06]"
         {...tooltip.props(`${who} · ${t('nav.expand')}`)}
       >
-        <AfusMark className="h-9 w-9 flex-none rounded-lg shadow-sm ring-1 ring-white/10" title={restaurantName} />
+        <AfusMark className="h-9 w-9 flex-none rounded-lg shadow-sm ring-1 ring-black/5 dark:ring-white/10" title={restaurantName} />
         {collapsed ? null : (
           <span className="min-w-0 flex-1 leading-tight">
-            <span dir="auto" className="block truncate text-sm font-bold" title={restaurantName}>
+            <span dir="auto" className="block truncate text-sm font-bold text-ink-900 dark:text-white" title={restaurantName}>
               {restaurantName}
             </span>
             <span className="mt-0.5 flex min-w-0 items-center gap-1 text-[11px]" title={`${userName} — ${roleName}`}>
-              <span dir="auto" className="min-w-0 truncate text-white/70">
+              <span dir="auto" className="min-w-0 truncate text-ink-500 dark:text-white/70">
                 {userName}
               </span>
-              {roleName ? <span className="flex-none text-white/40">— {roleName}</span> : null}
+              {roleName ? <span className="flex-none text-ink-400 dark:text-white/40">— {roleName}</span> : null}
             </span>
           </span>
         )}
@@ -178,21 +179,21 @@ export function Sidebar({
           const items = group.filter((item) => canSee(permissions, item.permission))
           if (items.length === 0) return null
           return (
-            <div key={index} className={index > 0 ? 'mt-1.5 border-t border-white/[0.07] pt-1.5' : undefined}>
+            <div key={index} className={index > 0 ? 'mt-1.5 border-t border-ink-200 pt-1.5 dark:border-white/[0.07]' : undefined}>
               {items.map(entry)}
             </div>
           )
         })}
       </nav>
 
-      <div className="flex-none space-y-0.5 border-t border-white/10 p-2">
+      <div className="flex-none space-y-0.5 border-t border-ink-200 p-2 dark:border-white/10">
         {canSee(permissions, settingsItem.permission) ? entry(settingsItem) : null}
         <button
           type="button"
           onClick={onLogout}
           data-testid="nav-logout"
           className={clsx(
-            'sidebar-item w-full text-red-300 hover:bg-red-500/10 hover:text-red-200',
+            'sidebar-item w-full text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-300 dark:hover:bg-red-500/10 dark:hover:text-red-200',
             collapsed && 'justify-center !px-0'
           )}
           {...tooltip.props(t('auth.logout'))}

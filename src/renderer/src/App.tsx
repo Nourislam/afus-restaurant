@@ -86,7 +86,7 @@ export default function App() {
 
   if (phase === 'error') {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 bg-ink-950 p-8 text-center text-white">
+      <div className="flex h-full flex-col items-center justify-center gap-4 bg-ink-100 p-8 text-center text-ink-800 dark:bg-ink-950 dark:text-white">
         <p className="text-sm font-semibold">{errorText(language, error ?? 'INTERNAL')}</p>
         <Button onClick={() => void bootstrap()}>{t('common.retry')}</Button>
       </div>

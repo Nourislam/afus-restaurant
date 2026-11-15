@@ -158,7 +158,7 @@ export function AppShell() {
         <Sidebar
           groups={groups}
           onLogout={() => void handleLogout()}
-          footer={<p className="px-2.5 pt-1 text-[10px] text-white/30">v1.0 · AFUS</p>}
+          footer={<p className="px-2.5 pt-1 text-[10px] text-ink-400 dark:text-white/30">v1.0 · AFUS</p>}
         />
         {/* The screen owns its own scrolling: the window never scrolls. */}
         <main className="page relative min-w-0 flex-1">
