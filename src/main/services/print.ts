@@ -22,11 +22,17 @@ async function render(html: string): Promise<BrowserWindow> {
 }
 
 export async function listPrinters(): Promise<PrinterInfo[]> {
-  const all = BrowserWindow.getAllWindows()
-  const target = all[0]?.webContents ?? webContents.getAllWebContents()[0]
-  if (!target) return []
-  const printers = await target.getPrintersAsync()
-  return printers.map((p) => ({ name: p.name, displayName: p.displayName || p.name, isDefault: p.isDefault }))
+  /* No printer, no window, or a driver that refuses to answer: the settings
+     screen shows an empty list and stays usable rather than erroring out. */
+  try {
+    const all = BrowserWindow.getAllWindows()
+    const target = all[0]?.webContents ?? webContents.getAllWebContents()[0]
+    if (!target?.getPrintersAsync) return []
+    const printers = await target.getPrintersAsync()
+    return printers.map((p) => ({ name: p.name, displayName: p.displayName || p.name, isDefault: p.isDefault }))
+  } catch {
+    return []
+  }
 }
 
 export async function printHtml(input: {

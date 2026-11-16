@@ -23,6 +23,8 @@ import { adjustLoyalty, getCustomer, listCustomers, saveCustomer, toggleFavorite
 import { exportPdf, listPrinters, printHtml } from '../../services/print'
 import { exportSite, getWebsiteState, setWebsiteConfig, startSite, stopSite, webOrders } from '../../services/website'
 import { listBranches, listOverrides, saveBranch, setBranchActive, setBranchOpen, setOverride } from '../../services/branches'
+import { receiptHtml } from '@shared/receipts'
+import { getSettings } from '../../services/settings'
 import { registerMany } from '../registry'
 
 const hoursSchema = z
@@ -193,14 +195,14 @@ export const ordersChannels = () =>
       definition: {
         permission: 'orders.view',
         schema: z.object({ orderId: z.number().int().positive(), language: z.string().max(4), paper: z.string().max(8) }),
-        handler: (input: { orderId: number; language: string }) => {
+        handler: (input: { orderId: number; language: string; paper: string }) => {
+          /* The same builder the sales screen prints from: a ticket made here
+             must carry the restaurant's identity, its VAT and stamp lines and
+             the fiscal number, or it is not a receipt the law recognises. */
           const order = buildOrder(input.orderId)
-          const rows = order.items
-            .map((i) => `<tr><td>${i.qty}× ${input.language === 'ar' ? i.productNameAr : i.productNameFr}</td><td style="text-align:end">${(i.lineTotalCents / 100).toFixed(2)}</td></tr>`)
-            .join('')
-          return {
-            html: `<html dir="${input.language === 'ar' ? 'rtl' : 'ltr'}"><body style="font-family:sans-serif;width:280px"><h3>${order.orderNumber}</h3><table style="width:100%">${rows}</table><hr><p style="text-align:end"><b>${(order.totalCents / 100).toFixed(2)} DZD</b></p></body></html>`
-          }
+          const paper = input.paper === '58' || input.paper === 'a4' ? input.paper : '80'
+          const language = input.language === 'fr' ? 'fr' : 'ar'
+          return { html: receiptHtml(order, getSettings(), language, paper) }
         }
       }
     },

@@ -29,7 +29,7 @@ import {
   PageHeader,
   Select
 } from '../components/ui'
-import { kitchenTicketHtml, receiptHtml } from '../lib/receipts'
+import { kitchenTicketHtml, receiptHtml } from '@shared/receipts'
 
 const NEXT_STATUSES: Record<string, string[]> = {
   new: ['accepted'],

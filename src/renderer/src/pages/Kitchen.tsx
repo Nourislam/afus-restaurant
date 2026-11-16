@@ -8,7 +8,7 @@ import { useT } from '../i18n'
 import { useAppStore } from '../store/app'
 import { elapsedMinutes } from '../lib/format'
 import { orderTypeLabel, stationLabel } from '../lib/labels'
-import { kitchenTicketHtml } from '../lib/receipts'
+import { kitchenTicketHtml } from '@shared/receipts'
 import { Badge, Button, Card, EmptyState, ErrorBox, Loading, PageHeader, Spinner } from '../components/ui'
 
 type ColumnKey = 'new' | 'preparing' | 'ready'

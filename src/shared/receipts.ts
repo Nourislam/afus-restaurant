@@ -1,6 +1,6 @@
-import type { AppSettings, Order } from '@shared/types'
-import type { Lang } from '@shared/constants'
-import { formatMoney, formatDate, formatTime } from './format'
+import type { AppSettings, Order } from './types'
+import type { Lang } from './constants'
+import { formatDate, formatMoney, formatTime } from './format'
 
 const escape = (value: string | null | undefined): string =>
   String(value ?? '')

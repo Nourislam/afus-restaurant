@@ -4,6 +4,7 @@ import { dbAll, dbGet, dbWrite } from '../db/client'
 import { AppError } from '../utils/errors'
 import { writeAudit } from './audit'
 
+/* Names the orders table `o`, so every query using it must alias it that way. */
 const OPEN_ORDER = `o.status NOT IN ('completed', 'cancelled') AND o.isHeld = 0`
 
 export function listAreas(): DiningArea[] {
@@ -95,7 +96,7 @@ export function setTableStatus(id: number, status: string): { id: number; name: 
   if (!TABLE_STATUSES.some((entry) => entry.value === status)) throw new AppError('INVALID_STATUS')
   const table = dbGet<{ id: number; name: string }>('SELECT id, name FROM dining_tables WHERE id = ?', [id])
   if (!table) throw new AppError('NOT_FOUND')
-  const open = dbGet<{ id: number }>(`SELECT id FROM orders WHERE tableId = ? AND ${OPEN_ORDER}`, [id])
+  const open = dbGet<{ id: number }>(`SELECT o.id FROM orders o WHERE o.tableId = ? AND ${OPEN_ORDER}`, [id])
   if (open && status === 'free') throw new AppError('CONFLICT', 'Table has an open order')
   dbWrite('UPDATE dining_tables SET status = ? WHERE id = ?', [status, id])
   writeAudit('tables.status', 'table', id, { status })
@@ -103,7 +104,7 @@ export function setTableStatus(id: number, status: string): { id: number; name: 
 }
 
 export function removeTable(id: number): { removed: boolean } {
-  const open = dbGet<{ id: number }>(`SELECT id FROM orders WHERE tableId = ? AND ${OPEN_ORDER}`, [id])
+  const open = dbGet<{ id: number }>(`SELECT o.id FROM orders o WHERE o.tableId = ? AND ${OPEN_ORDER}`, [id])
   if (open) throw new AppError('CONFLICT', 'Table has an open order')
   const result = dbWrite('UPDATE dining_tables SET isArchived = 1 WHERE id = ?', [id])
   if (result.changes === 0) throw new AppError('NOT_FOUND')

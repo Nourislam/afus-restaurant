@@ -37,7 +37,7 @@ import {
   Spinner,
   Textarea
 } from '../components/ui'
-import { kitchenTicketHtml, receiptHtml } from '../lib/receipts'
+import { kitchenTicketHtml, receiptHtml } from '@shared/receipts'
 
 interface DraftLine {
   key: string
