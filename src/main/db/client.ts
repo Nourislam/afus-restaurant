@@ -77,8 +77,19 @@ function migrate(): void {
 }
 
 /** Durably write the in-memory image to disk (atomic tmp+rename). */
+/**
+ * How deep we are inside `transaction()`. It matters because sql.js refuses to
+ * export a database with a write transaction open — "SQLite is busy or locked"
+ * — and every save is an export. Saving mid-transaction therefore threw, and
+ * the whole operation was rolled back.
+ */
+let openTransactions = 0
+
 export function persist(): void {
   if (!databasePath || !handle) return
+  /* Nothing is saved while a transaction is open: the commit saves it, once,
+     and a half-finished operation must never reach the file anyway. */
+  if (openTransactions > 0) return
   const bytes = handle.export()
   const temporary = `${databasePath}.tmp`
   writeFileSync(temporary, bytes)
@@ -124,16 +135,38 @@ export function dbRun(sql: string, params: Params = []): RunResult {
 }
 
 /** Run `work` inside a transaction; rolls back on any throw. Commits persist to disk. */
+/**
+ * Run `work` as one all-or-nothing step. Nesting joins the outer transaction
+ * instead of starting a second one, which SQLite does not allow.
+ */
 export function transaction<T>(work: () => T): T {
   const db = getDb()
+  if (openTransactions > 0) {
+    /* Already inside one: the outer call owns the commit. */
+    openTransactions += 1
+    try {
+      return work()
+    } finally {
+      openTransactions -= 1
+    }
+  }
+
   db.exec('BEGIN')
+  openTransactions = 1
   try {
     const result = work()
+    openTransactions = 0
     db.exec('COMMIT')
+    /* Saved once, now that the write transaction is finished. */
     persist()
     return result
   } catch (error) {
-    db.exec('ROLLBACK')
+    openTransactions = 0
+    try {
+      db.exec('ROLLBACK')
+    } catch {
+      /* Already rolled back by SQLite; the original fault is what matters. */
+    }
     throw error
   }
 }

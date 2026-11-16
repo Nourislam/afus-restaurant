@@ -36,6 +36,13 @@ export function isAppError(error: unknown): error is AppError {
 /** Convert any thrown value into the envelope-safe `{ code, details }` shape. */
 export function toErrorPayload(error: unknown): { code: ErrorCode; details?: unknown } {
   if (isAppError(error)) return { code: error.code, details: error.details }
+  /* Anything else is a fault, not a refusal. The screen can only show
+     "internal error", so the real cause has to be written down here or it is
+     lost — and sql.js throws plain strings, which carry no stack at all. */
+  const described = error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error)
+  console.error('[afus] unhandled fault:', described)
+  /* Written down here and nowhere else: a stack can carry file paths and the
+     shop's own data, and the screen has no use for either. */
   return { code: 'INTERNAL' }
 }
 

@@ -1,6 +1,6 @@
 /** The delivery sheet: couriers, statuses and the link back to the order. */
 import type { DeliveryRecord } from '@shared/types'
-import { dbAll, dbGet, dbWrite } from '../db/client'
+import { dbAll, dbGet, dbWrite, transaction } from '../db/client'
 import { AppError } from '../utils/errors'
 import { nowStamp } from '../utils/dates'
 import { writeAudit } from './audit'
@@ -66,16 +66,19 @@ export function setDeliveryStatus(id: number, status: string, note?: string | nu
   const current = getDelivery(id)
   if (!(FLOW[current.status] ?? []).includes(status)) throw new AppError('INVALID_STATUS', `${current.status} → ${status}`)
   if (status === 'assigned' && !current.courier) throw new AppError('VALIDATION', 'Assign a courier first')
-  dbWrite('UPDATE delivery_info SET status = ?, deliveredAt = ?, note = COALESCE(?, note) WHERE id = ?', [
-    status,
-    status === 'delivered' ? nowStamp() : null,
-    note ?? null,
-    id
-  ])
-  /* cancelOrder runs its own transaction, so it is called after ours. */
-  if (status === 'cancelled' && !['completed', 'cancelled'].includes(current.orderStatus)) {
-    cancelOrder({ orderId: current.orderId, reason: note ?? 'delivery cancelled' })
-  }
+  /* One step: the sheet and the order it belongs to move together, or not at
+     all. cancelOrder opens its own transaction, which joins this one. */
+  transaction(() => {
+    dbWrite('UPDATE delivery_info SET status = ?, deliveredAt = ?, note = COALESCE(?, note) WHERE id = ?', [
+      status,
+      status === 'delivered' ? nowStamp() : null,
+      note ?? null,
+      id
+    ])
+    if (status === 'cancelled' && !['completed', 'cancelled'].includes(current.orderStatus)) {
+      cancelOrder({ orderId: current.orderId, reason: note ?? 'delivery cancelled' })
+    }
+  })
   writeAudit('delivery.status', 'delivery', id, { from: current.status, to: status })
   return getDelivery(id)
 }
