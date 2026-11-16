@@ -29,6 +29,8 @@ import type {
   FiscalClosure,
   IntegrityReport,
   LoginProfile,
+  Invoice,
+  InvoiceBuyer,
   LoyaltyMovement,
   LoyaltyRules,
   Offer,
@@ -210,6 +212,15 @@ export const api = {
     moveTable: (orderId: number, tableId: number | null) => call<Order>('orders.moveTable', { orderId, tableId }),
     merge: (fromOrderId: number, toOrderId: number) => call<Order>('orders.merge', { fromOrderId, toOrderId }),
     receipt: (orderId: number, language: string, paper: string) => call<{ html: string }>('orders.receipt', { orderId, language, paper })
+  },
+
+  invoices: {
+    list: (input: { from?: string; to?: string; search?: string } = {}) => call<Invoice[]>('invoices.list', input),
+    get: (id: number) => call<Invoice>('invoices.get', { id }),
+    forOrder: (orderId: number) => call<Invoice | null>('invoices.forOrder', { orderId }),
+    next: () => call<{ number: string }>('invoices.next'),
+    issue: (orderId: number, buyer: InvoiceBuyer) => call<Invoice>('invoices.issue', { orderId, buyer }),
+    document: (id: number, language: 'ar' | 'fr') => call<{ html: string }>('invoices.document', { id, language })
   },
 
   offers: {

@@ -513,6 +513,38 @@ export interface LoyaltyRules {
   minRedeem: number
 }
 
+/** A formal invoice issued against a completed sale, with its own numbering. */
+export interface Invoice {
+  id: number
+  orderId: number
+  orderNumber: string
+  number: string
+  seq: number
+  year: number
+  buyerName: string
+  buyerAddress: string | null
+  buyerNif: string | null
+  buyerRc: string | null
+  buyerPhone: string | null
+  subtotalCents: number
+  discountCents: number
+  taxCents: number
+  stampCents: number
+  totalCents: number
+  taxRateBp: number
+  currency: string
+  issuedAt: string
+  userName: string | null
+}
+
+export interface InvoiceBuyer {
+  name: string
+  address?: string | null
+  nif?: string | null
+  rc?: string | null
+  phone?: string | null
+}
+
 export interface Customer {
   id: number
   name: string

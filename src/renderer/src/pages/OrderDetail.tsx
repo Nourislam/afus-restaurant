@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, ChefHat, CreditCard, Printer, Receipt, X } from 'lucide-react'
-import type { Order } from '@shared/types'
+import { ArrowLeft, ChefHat, CreditCard, FileText, Printer, Receipt, X } from 'lucide-react'
+import type { Invoice, Order } from '@shared/types'
 import { ORDER_STATUSES } from '@shared/constants'
 import { api } from '../lib/api'
 import { useApi } from '../lib/hooks'
@@ -66,6 +66,8 @@ export default function OrderDetailPage() {
   const closed = data.status === 'completed' || data.status === 'cancelled'
   const currency = settings?.currency ?? 'DZD'
 
+  const [invoiceOpen, setInvoiceOpen] = useState(false)
+
   const printReceipt = async () => {
     if (!settings) return
     try {
@@ -117,6 +119,11 @@ export default function OrderDetailPage() {
             <Button variant="secondary" icon={ChefHat} onClick={() => void printKitchen()}>
               {t('pos.printKitchen')}
             </Button>
+            {data.status === 'completed' ? (
+              <Button variant="secondary" icon={FileText} onClick={() => setInvoiceOpen(true)}>
+                {t('invoices.issue')}
+              </Button>
+            ) : null}
             {!closed && can('pos.use') ? (
               <Link to={`/pos?order=${data.id}`}>
                 <Button variant="secondary" icon={Receipt}>
@@ -374,6 +381,8 @@ export default function OrderDetailPage() {
           </Field>
         </div>
       </Modal>
+
+      {invoiceOpen ? <InvoiceSheet order={data} onClose={() => setInvoiceOpen(false)} /> : null}
     </div>
   )
 }
@@ -447,6 +456,111 @@ function QuickPayModal({
         </div>
         {error ? <p className="text-xs font-medium text-red-600">{error}</p> : null}
         <p className="text-[10px] text-slate-400">{ORDER_STATUSES.find((status) => status.value === order.status)?.label[language]}</p>
+      </div>
+    </Modal>
+  )
+}
+
+/**
+ * Establishing the invoice for a finished sale. The buyer's fiscal identity is
+ * typed here; a company needs its NIF on the document to deduct the meal.
+ */
+function InvoiceSheet({ order, onClose }: { order: Order; onClose: () => void }) {
+  const { t, language } = useT()
+  const settings = useAppStore((state) => state.settings)
+  const existing = useApi(() => api.invoices.forOrder(order.id), [order.id])
+  const next = useApi(() => api.invoices.next(), [])
+  const [buyer, setBuyer] = useState({
+    name: order.customerName ?? '',
+    address: '',
+    nif: '',
+    rc: '',
+    phone: ''
+  })
+  const [issued, setIssued] = useState<Invoice | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const invoice = issued ?? existing.data ?? null
+
+  const print = async (target: Invoice) => {
+    setBusy(true)
+    setError(null)
+    try {
+      const { html } = await api.invoices.document(target.id, language)
+      await api.print.html(html, settings?.printerName || undefined, false)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'UNEXPECTED_ERROR')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const issue = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const made = await api.invoices.issue(order.id, buyer)
+      setIssued(made)
+      await print(made)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'UNEXPECTED_ERROR')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal
+      open
+      title={t('invoices.issue')}
+      subtitle={invoice ? invoice.number : next.data ? `${t('invoices.nextNumber')}: ${next.data.number}` : undefined}
+      onClose={onClose}
+      size="md"
+      footer={
+        invoice ? (
+          <>
+            <Button variant="secondary" onClick={onClose}>{t('common.close')}</Button>
+            <Button icon={Printer} loading={busy} onClick={() => void print(invoice)}>{t('invoices.print')}</Button>
+          </>
+        ) : (
+          <>
+            <Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button>
+            <Button loading={busy} disabled={!buyer.name.trim()} onClick={() => void issue()}>{t('invoices.issue')}</Button>
+          </>
+        )
+      }
+    >
+      <div className="space-y-3">
+        {error ? <ErrorBox code={error} /> : null}
+        {invoice ? (
+          <div className="rounded-lg border border-accent-200 bg-accent-50 p-3 text-xs dark:border-accent-700/40 dark:bg-accent-500/10">
+            <p className="font-semibold text-accent-700 dark:text-accent-300">{t('invoices.issued')}</p>
+            <p className="num mt-1 text-ink-700 dark:text-ink-200" dir="ltr">{invoice.number}</p>
+            <p className="mt-0.5 text-ink-600 dark:text-ink-300">{invoice.buyerName}</p>
+          </div>
+        ) : (
+          <>
+            <Field label={t('invoices.buyerName')} required>
+              <Input value={buyer.name} onChange={(event) => setBuyer({ ...buyer, name: event.target.value })} autoFocus />
+            </Field>
+            <Field label={t('settings.address')}>
+              <Input value={buyer.address} onChange={(event) => setBuyer({ ...buyer, address: event.target.value })} />
+            </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label={t('invoices.buyerNif')}>
+                <Input value={buyer.nif} onChange={(event) => setBuyer({ ...buyer, nif: event.target.value })} dir="ltr" inputMode="numeric" />
+              </Field>
+              <Field label={t('invoices.buyerRc')}>
+                <Input value={buyer.rc} onChange={(event) => setBuyer({ ...buyer, rc: event.target.value })} dir="ltr" />
+              </Field>
+            </div>
+            <Field label={t('settings.phone')}>
+              <Input value={buyer.phone} onChange={(event) => setBuyer({ ...buyer, phone: event.target.value })} dir="ltr" />
+            </Field>
+          </>
+        )}
+        <p className="text-[11px] text-ink-400">{t('invoices.hint')}</p>
       </div>
     </Modal>
   )

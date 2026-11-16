@@ -201,6 +201,8 @@ describe('every screen can load the data it opens with', () => {
     ['web.status', {}],
     ['print.printers', {}],
     ['offers.list', {}],
+    ['invoices.list', {}],
+    ['invoices.next', {}],
     ['loyalty.rules', {}]
   ]
 
@@ -458,6 +460,31 @@ it('runs an offer and a loyalty redemption through the till', async () => {
     expect((await call('offers.get', { id: offer.id })).isActive).toBe(false)
     const spare = await call('offers.save', { nameAr: 'غير مستعملة', kind: 'amount', valueCents: 5_000 })
     expect((await call('offers.remove', { id: spare.id })).removed).toBe(true)
+  })
+
+it('establishes a formal invoice for a company and reprints it', async () => {
+    const product = firstProduct()
+    const order = await call('orders.create', { type: 'takeaway', items: [{ productId: product.id, qty: 2 }] })
+    /* An unfinished sale cannot be invoiced. */
+    expect(await failure('invoices.issue', { orderId: order.id, buyer: { name: 'SARL Test' } })).toBe('INVALID_STATUS')
+
+    await call('orders.pay', { orderId: order.id, payments: [{ method: 'card', amountCents: order.totalCents }] })
+    expect((await call('invoices.forOrder', { orderId: order.id }))).toBeNull()
+
+    const invoice = await call('invoices.issue', {
+      orderId: order.id,
+      buyer: { name: 'SARL Bâtiment Est', address: 'Oran', nif: '000216001234567', rc: '31/00-9876543B21' }
+    })
+    expect(invoice.number).toMatch(/^FA-\d{4}-00001$/)
+    expect((await call('invoices.forOrder', { orderId: order.id })).id).toBe(invoice.id)
+    /* Asking again returns the same document, never a second number. */
+    expect((await call('invoices.issue', { orderId: order.id, buyer: { name: 'Autre' } })).id).toBe(invoice.id)
+
+    const doc = await call('invoices.document', { id: invoice.id, language: 'fr' })
+    expect(doc.html).toContain('FACTURE')
+    expect(doc.html).toContain('000216001234567')
+    expect(doc.html).toContain('Arrêtée la présente facture')
+    expect((await call('invoices.list', {})).length).toBe(1)
   })
 
   it('takes a backup and lists it', async () => {

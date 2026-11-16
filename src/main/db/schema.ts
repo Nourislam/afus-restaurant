@@ -5,7 +5,7 @@
  * column name, so services hand domain objects straight to the renderer without
  * a mapping layer (and without the drift that comes with one).
  */
-export const SCHEMA_VERSION = 6
+export const SCHEMA_VERSION = 7
 
 const V1 = `
 CREATE TABLE IF NOT EXISTS roles (
@@ -528,11 +528,42 @@ ALTER TABLE orders ADD COLUMN loyaltyPointsRedeemed INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE orders ADD COLUMN loyaltyDiscountCents INTEGER NOT NULL DEFAULT 0;
 `
 
+/* V7 — the formal invoice (facture). A company cannot deduct a meal with a till
+   ticket; it needs a document with both identities, its own unbroken series and
+   the VAT broken out. The totals are snapshotted so a reprint years later is
+   identical to what was issued. */
+const V7 = `
+CREATE TABLE IF NOT EXISTS invoices (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  orderId INTEGER NOT NULL UNIQUE REFERENCES orders(id) ON DELETE RESTRICT,
+  number TEXT NOT NULL UNIQUE,
+  seq INTEGER NOT NULL,
+  year INTEGER NOT NULL,
+  buyerName TEXT NOT NULL,
+  buyerAddress TEXT,
+  buyerNif TEXT,
+  buyerRc TEXT,
+  buyerPhone TEXT,
+  subtotalCents INTEGER NOT NULL DEFAULT 0,
+  discountCents INTEGER NOT NULL DEFAULT 0,
+  taxCents INTEGER NOT NULL DEFAULT 0,
+  stampCents INTEGER NOT NULL DEFAULT 0,
+  totalCents INTEGER NOT NULL DEFAULT 0,
+  taxRateBp INTEGER NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'DZD',
+  issuedAt TEXT NOT NULL,
+  userId INTEGER REFERENCES users(id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_seq ON invoices (year, seq);
+`
+
 export const MIGRATIONS: Record<number, string> = {
   1: V1,
   2: V2,
   3: V3,
   4: V4,
   5: V5,
-  6: V6
+  6: V6,
+  7: V7
 }

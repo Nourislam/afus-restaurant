@@ -2,6 +2,10 @@ import { z } from 'zod'
 import { getOffer, listOffers, offersFor, removeOffer, saveOffer, setOfferActive } from '../../services/offers'
 import { applyOffer } from '../../services/orders'
 import { adjust, balance, cancelRedeem, loyaltyRules, movements, redeem } from '../../services/loyalty'
+import { getInvoice, invoiceForOrder, issueInvoice, listInvoices, nextInvoiceNumber } from '../../services/invoices'
+import { buildOrder } from '../../services/orders'
+import { getSettings } from '../../services/settings'
+import { invoiceHtml } from '@shared/invoiceDocument'
 import { registerMany } from '../registry'
 
 const id = z.number().int().positive()
@@ -49,6 +53,40 @@ export const offersChannels = () =>
         permission: ['pos.use', 'orders.discount'],
         schema: z.object({ orderId: id, offerId: id.nullable().optional(), auto: z.boolean().optional() }),
         handler: (input: Parameters<typeof applyOffer>[0]) => applyOffer(input)
+      }
+    },
+
+    /* ---------------- The formal invoice ---------------- */
+    { channel: 'invoices.list', definition: { permission: ['orders.view', 'reports.view'], schema: z.object({ from: day.optional(), to: day.optional(), search: z.string().max(80).optional(), limit: z.number().int().min(1).max(1000).optional() }).passthrough(), handler: (input: Parameters<typeof listInvoices>[0]) => listInvoices(input) } },
+    { channel: 'invoices.get', definition: { permission: 'orders.view', schema: z.object({ id }), handler: (input: { id: number }) => getInvoice(input.id) } },
+    { channel: 'invoices.forOrder', definition: { permission: 'orders.view', schema: z.object({ orderId: id }), handler: (input: { orderId: number }) => invoiceForOrder(input.orderId) } },
+    { channel: 'invoices.next', definition: { permission: 'orders.view', handler: () => ({ number: nextInvoiceNumber() }) } },
+    {
+      channel: 'invoices.issue',
+      definition: {
+        permission: ['orders.close', 'settings.manage'],
+        schema: z.object({
+          orderId: id,
+          buyer: z.object({
+            name: z.string().min(1).max(160),
+            address: z.string().max(240).nullable().optional(),
+            nif: z.string().max(40).nullable().optional(),
+            rc: z.string().max(40).nullable().optional(),
+            phone: z.string().max(40).nullable().optional()
+          })
+        }),
+        handler: (input: Parameters<typeof issueInvoice>[0]) => issueInvoice(input)
+      }
+    },
+    {
+      channel: 'invoices.document',
+      definition: {
+        permission: 'orders.view',
+        schema: z.object({ id, language: z.enum(['ar', 'fr']) }),
+        handler: (input: { id: number; language: 'ar' | 'fr' }) => {
+          const invoice = getInvoice(input.id)
+          return { html: invoiceHtml(invoice, buildOrder(invoice.orderId), getSettings(), input.language) }
+        }
       }
     },
 

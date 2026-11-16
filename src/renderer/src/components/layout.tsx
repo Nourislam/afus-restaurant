@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { clsx } from 'clsx'
 import {
   BarChart3,
+  FileText,
   Bike,
   BookOpen,
   CalendarClock,
@@ -127,6 +128,7 @@ export function AppShell() {
     { to: '/employees', label: t('nav.employees'), icon: ShieldCheck, permission: 'employees.manage' }
   ]
   const figures: NavItem[] = [
+    { to: '/invoices', label: t('nav.invoices'), icon: FileText, permission: 'orders.view' },
     { to: '/finance', label: t('nav.finance'), icon: Wallet, permission: 'finance.view' },
     { to: '/reports', label: t('nav.reports'), icon: BarChart3, permission: 'reports.view' },
     { to: '/insight', label: t('nav.insight'), icon: Lightbulb, permission: 'insight.view' }
