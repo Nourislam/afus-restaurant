@@ -91,8 +91,8 @@ export function receiptHtml(order: Order, settings: AppSettings, language: Lang,
 
   const labels =
     language === 'ar'
-      ? { title: 'وصل الزبون', order: 'طلب', table: 'طاولة', waiter: 'نادل', subtotal: 'المجموع', discount: 'تخفيض', tax: 'ضريبة (معلومة)', delivery: 'توصيل', total: 'الإجمالي', paid: 'المدفوع', due: 'المتبقي', thanks: 'شكراً لزيارتكم', item: 'الصنف', qty: 'كمية', amount: 'المبلغ', type: 'النوع', date: 'التاريخ', fiscalNo: 'رقم جبائي', stamp: 'طابع جبائي', integrity: 'رمز السلامة' }
-      : { title: 'Ticket client', order: 'Commande', table: 'Table', waiter: 'Serveur', subtotal: 'Sous-total', discount: 'Remise', tax: 'TVA (info)', delivery: 'Livraison', total: 'Total', paid: 'Payé', due: 'Reste', thanks: 'Merci de votre visite', item: 'Article', qty: 'Qté', amount: 'Montant', type: 'Type', date: 'Date', fiscalNo: 'N° fiscal', stamp: 'Timbre fiscal', integrity: 'Code d’intégrité' }
+      ? { title: 'وصل الزبون', order: 'طلب', table: 'طاولة', waiter: 'نادل', subtotal: 'المجموع', discount: 'تخفيض', tax: 'ضريبة (معلومة)', delivery: 'توصيل', total: 'الإجمالي', paid: 'المدفوع', due: 'المتبقي', thanks: 'شكراً لزيارتكم', item: 'الصنف', qty: 'كمية', amount: 'المبلغ', type: 'النوع', date: 'التاريخ', offer: 'عرض', loyalty: 'نقاط الولاء', earned: 'نقاط مكتسبة', fiscalNo: 'رقم جبائي', stamp: 'طابع جبائي', integrity: 'رمز السلامة' }
+      : { title: 'Ticket client', order: 'Commande', table: 'Table', waiter: 'Serveur', subtotal: 'Sous-total', discount: 'Remise', tax: 'TVA (info)', delivery: 'Livraison', total: 'Total', paid: 'Payé', due: 'Reste', thanks: 'Merci de votre visite', item: 'Article', qty: 'Qté', amount: 'Montant', type: 'Type', date: 'Date', offer: 'Offre', loyalty: 'Points fidélité', earned: 'Points gagnés', fiscalNo: 'N° fiscal', stamp: 'Timbre fiscal', integrity: 'Code d’intégrité' }
 
   const taxLabel = settings.taxEnabled && settings.taxRateBp > 0 ? `${language === 'ar' ? 'ض.ق.م' : 'TVA'} ${(settings.taxRateBp / 100).toLocaleString(language === 'ar' ? 'ar-DZ' : 'fr-DZ', { maximumFractionDigits: 2 })}%` : labels.tax
   const fiscalNo = order.fiscalSeq ? `${labels.fiscalNo}: <strong dir="ltr">${order.fiscalSeq}</strong>` : ''
@@ -109,7 +109,8 @@ export function receiptHtml(order: Order, settings: AppSettings, language: Lang,
   <tbody>${rows}</tbody></table>
   <div class="totals">
     <div><span>${labels.subtotal}</span><span class="num">${formatMoney(order.subtotalCents, currency, 0)}</span></div>
-    ${order.discountCents > 0 ? `<div><span>${labels.discount}</span><span class="num">-${formatMoney(order.discountCents, currency, 0)}</span></div>` : ''}
+    ${order.discountCents - order.loyaltyDiscountCents > 0 ? `<div><span>${order.offerName ? `${labels.offer}: ${escape(order.offerName)}` : labels.discount}</span><span class="num">-${formatMoney(order.discountCents - order.loyaltyDiscountCents, currency, 0)}</span></div>` : ''}
+    ${order.loyaltyDiscountCents > 0 ? `<div><span>${labels.loyalty} (${order.loyaltyPointsRedeemed})</span><span class="num">-${formatMoney(order.loyaltyDiscountCents, currency, 0)}</span></div>` : ''}
     ${order.deliveryFeeCents > 0 ? `<div><span>${labels.delivery}</span><span class="num">${formatMoney(order.deliveryFeeCents, currency, 0)}</span></div>` : ''}
     ${order.taxCents > 0 ? `<div><span>${taxLabel}</span><span class="num">${formatMoney(order.taxCents, currency, 0)}</span></div>` : ''}
     ${order.stampCents > 0 ? `<div><span>${labels.stamp}</span><span class="num">${formatMoney(order.stampCents, currency, 0)}</span></div>` : ''}
@@ -119,6 +120,7 @@ export function receiptHtml(order: Order, settings: AppSettings, language: Lang,
     ${order.dueCents > 0 ? `<div><span>${labels.due}</span><span class="num">${formatMoney(order.dueCents, currency, 0)}</span></div>` : ''}
   </div>
   ${order.note ? `<p class="note">${escape(order.note)}</p>` : ''}
+  ${order.loyaltyPointsEarned > 0 ? `<p class="note" style="text-align:center">★ ${labels.earned}: ${order.loyaltyPointsEarned}</p>` : ''}
   <footer>${escape(settings.receiptFooter || labels.thanks)}<br/>${escape(settings.restaurantName)}${integrity}</footer>
   </body></html>`
 }

@@ -14,6 +14,7 @@ import {
   Lightbulb,
   Moon,
   Package,
+  Percent,
   ReceiptText,
   ShieldCheck,
   ShoppingCart,
@@ -121,6 +122,7 @@ export function AppShell() {
     { to: '/inventory', label: t('nav.inventory'), icon: Package, permission: 'inventory.view' },
     { to: '/purchases', label: t('nav.purchases'), icon: Truck, permission: 'purchases.view' },
     { to: '/customers', label: t('nav.customers'), icon: Users, permission: 'customers.manage' },
+    { to: '/offers', label: t('nav.offers'), icon: Percent, permission: 'menu.view' },
     { to: '/website', label: t('web.nav'), icon: Globe, permission: 'settings.manage' },
     { to: '/employees', label: t('nav.employees'), icon: ShieldCheck, permission: 'employees.manage' }
   ]

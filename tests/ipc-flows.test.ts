@@ -29,6 +29,7 @@ const { fiscalChannels } = await import('../src/main/ipc/register/fiscal')
 const { backofficeChannels } = await import('../src/main/ipc/register/backoffice')
 const { financeChannels } = await import('../src/main/ipc/register/finance')
 const { systemChannels } = await import('../src/main/ipc/register/system')
+const { offersChannels } = await import('../src/main/ipc/register/offers')
 const { closeDatabase, dbGet, openDatabase } = await import('../src/main/db/client')
 const { seedCoreData } = await import('../src/main/db/seed')
 const { completeSetup } = await import('../src/main/services/setup')
@@ -66,6 +67,7 @@ beforeEach(async () => {
   backofficeChannels()
   financeChannels()
   systemChannels()
+  offersChannels()
   const owner = completeSetup({
     restaurantName: 'Djemr',
     currency: 'DZD',
@@ -197,7 +199,9 @@ describe('every screen can load the data it opens with', () => {
     ['branches.list', {}],
     ['website.state', {}],
     ['web.status', {}],
-    ['print.printers', {}]
+    ['print.printers', {}],
+    ['offers.list', {}],
+    ['loyalty.rules', {}]
   ]
 
   it.each(reads)('%s answers without an error', async (channel, payload) => {
@@ -421,6 +425,39 @@ describe('the rest of the buttons in the program', () => {
     expect((await call('website.export', {})).files.length).toBe(2)
     expect(Array.isArray(await call('website.orders', {}))).toBe(true)
     expect((await call('web.export', {})).file).toContain('index.html')
+  })
+
+it('runs an offer and a loyalty redemption through the till', async () => {
+    const product = firstProduct()
+    await call('settings.update', { loyaltyEnabled: true, loyaltyEarnPer100: 1, loyaltyPointValueCents: 100, loyaltyMinRedeem: 10 })
+    const offer = await call('offers.save', { nameAr: 'خصم 10%', nameFr: 'Remise 10 %', kind: 'percent', valueBp: 1000 })
+    const customer = await call('customers.save', { name: 'Leïla', phone: '0771' })
+    await call('loyalty.adjust', { customerId: customer.id, points: 100, note: 'ouverture' })
+
+    const order = await call('orders.create', { type: 'takeaway', customerId: customer.id, items: [{ productId: product.id, qty: 1 }] })
+    const measured = await call('offers.forOrder', { orderId: order.id })
+    expect(measured.some((m: any) => m.eligible)).toBe(true)
+
+    const withOffer = await call('orders.applyOffer', { orderId: order.id, offerId: offer.id, auto: false })
+    expect(withOffer.offerId).toBe(offer.id)
+    expect(withOffer.discountCents).toBeGreaterThan(0)
+
+    const redeemed = await call('loyalty.redeem', { orderId: order.id, points: 20 })
+    expect(redeemed.discountCents).toBe(2_000)
+    expect((await call('loyalty.balance', { customerId: customer.id })).points).toBe(80)
+    await call('loyalty.cancelRedeem', { orderId: order.id })
+    expect((await call('loyalty.balance', { customerId: customer.id })).points).toBe(100)
+
+    const toPay = await call('orders.applyOffer', { orderId: order.id, offerId: offer.id, auto: false })
+    const paid = await call('orders.pay', { orderId: order.id, payments: [{ method: 'cash', amountCents: toPay.totalCents }] })
+    expect(paid.status).toBe('completed')
+    expect(paid.loyaltyPointsEarned).toBeGreaterThan(0)
+    expect((await call('loyalty.movements', { customerId: customer.id })).length).toBeGreaterThan(1)
+
+    await call('offers.setActive', { id: offer.id, active: false })
+    expect((await call('offers.get', { id: offer.id })).isActive).toBe(false)
+    const spare = await call('offers.save', { nameAr: 'غير مستعملة', kind: 'amount', valueCents: 5_000 })
+    expect((await call('offers.remove', { id: spare.id })).removed).toBe(true)
   })
 
   it('takes a backup and lists it', async () => {

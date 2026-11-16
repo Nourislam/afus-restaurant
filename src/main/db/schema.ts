@@ -5,7 +5,7 @@
  * column name, so services hand domain objects straight to the renderer without
  * a mapping layer (and without the drift that comes with one).
  */
-export const SCHEMA_VERSION = 5
+export const SCHEMA_VERSION = 6
 
 const V1 = `
 CREATE TABLE IF NOT EXISTS roles (
@@ -473,10 +473,66 @@ CREATE TABLE IF NOT EXISTS fiscal_closures (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_fiscal_seq ON orders (fiscalSeq);
 `
 
+/* V6 — offers and loyalty. An offer is a named rule the owner can audit, instead
+   of a manual discount whose reason is lost. Loyalty keeps a ledger so a balance
+   is always explainable. */
+const V6 = `
+CREATE TABLE IF NOT EXISTS offers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  nameAr TEXT NOT NULL,
+  nameFr TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'percent',
+  scope TEXT NOT NULL DEFAULT 'order',
+  targetId INTEGER,
+  valueBp INTEGER NOT NULL DEFAULT 0,
+  valueCents INTEGER NOT NULL DEFAULT 0,
+  minSubtotalCents INTEGER NOT NULL DEFAULT 0,
+  comboPriceCents INTEGER NOT NULL DEFAULT 0,
+  freeQty INTEGER NOT NULL DEFAULT 0,
+  startsOn TEXT,
+  endsOn TEXT,
+  daysMask INTEGER NOT NULL DEFAULT 127,
+  startTime TEXT,
+  endTime TEXT,
+  usageLimit INTEGER NOT NULL DEFAULT 0,
+  usedCount INTEGER NOT NULL DEFAULT 0,
+  isActive INTEGER NOT NULL DEFAULT 1,
+  createdAt TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS offer_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  offerId INTEGER NOT NULL REFERENCES offers(id) ON DELETE CASCADE,
+  productId INTEGER NOT NULL REFERENCES products(id),
+  qty INTEGER NOT NULL DEFAULT 1 CHECK (qty > 0),
+  UNIQUE (offerId, productId)
+);
+
+CREATE TABLE IF NOT EXISTS loyalty_movements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  customerId INTEGER NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  orderId INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+  kind TEXT NOT NULL,
+  points INTEGER NOT NULL,
+  note TEXT,
+  userId INTEGER REFERENCES users(id),
+  createdAt TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_loyalty_customer ON loyalty_movements (customerId);
+
+ALTER TABLE orders ADD COLUMN offerId INTEGER REFERENCES offers(id) ON DELETE SET NULL;
+ALTER TABLE orders ADD COLUMN offerDiscountCents INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN loyaltyPointsEarned INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN loyaltyPointsRedeemed INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN loyaltyDiscountCents INTEGER NOT NULL DEFAULT 0;
+`
+
 export const MIGRATIONS: Record<number, string> = {
   1: V1,
   2: V2,
   3: V3,
   4: V4,
-  5: V5
+  5: V5,
+  6: V6
 }

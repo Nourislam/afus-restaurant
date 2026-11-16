@@ -12,6 +12,8 @@ import { nowStamp } from '../utils/dates'
 import { writeAudit } from './audit'
 import { computeStamp, sealOrder } from './fiscal'
 import { consumeStockForOrder, restoreStockForOrder } from './inventory'
+import { bestOffer, discountFor, getOffer, isLive, markOfferUsed, releaseOfferUse } from './offers'
+import { earnForOrder, reverseForOrder } from './loyalty'
 import { postCashMovement } from './finance'
 
 interface CreateItemInput {
@@ -129,12 +131,20 @@ function recompute(orderId: number): void {
       "SELECT COALESCE(SUM(lineTotalCents), 0) AS total FROM order_items WHERE orderId = ? AND status != 'removed'",
       [orderId]
     )?.total ?? 0
-  const order = dbGet<{ discountCents: number; deliveryFeeCents: number; paidCents: number; stampCents: number }>(
-    'SELECT discountCents, deliveryFeeCents, paidCents, stampCents FROM orders WHERE id = ?',
+  const order = dbGet<{
+    discountCents: number
+    deliveryFeeCents: number
+    paidCents: number
+    stampCents: number
+    loyaltyDiscountCents: number
+  }>(
+    'SELECT discountCents, deliveryFeeCents, paidCents, stampCents, loyaltyDiscountCents FROM orders WHERE id = ?',
     [orderId]
   )
   if (!order) return
-  const discountCents = Math.min(order.discountCents, subtotalCents)
+  /* The offer or the cashier's own discount, then the points, both off the
+     dishes — never more than the dishes are worth. */
+  const discountCents = Math.min(order.discountCents + (order.loyaltyDiscountCents ?? 0), subtotalCents)
   const taxable = Math.max(0, subtotalCents - discountCents)
   const rate = settings.taxEnabled ? settings.taxRateBp : 0
   let taxCents = 0
@@ -163,6 +173,12 @@ function logStatus(orderId: number, from: string | null, to: string, note: strin
     'INSERT INTO order_status_history (orderId, fromStatus, toStatus, userId, note, createdAt) VALUES (?, ?, ?, ?, ?, ?)',
     [orderId, from, to, requireSession().userId, note, nowStamp()]
   )
+}
+
+/** The offer's own name, so a receipt can say why the price was lower. */
+function offerNameOf(offerId: number | null | undefined): string | null {
+  if (!offerId) return null
+  return dbGet<{ nameAr: string }>('SELECT nameAr FROM offers WHERE id = ?', [offerId])?.nameAr ?? null
 }
 
 /** Assemble the full Order object the renderer expects. */
@@ -209,6 +225,7 @@ export function buildOrder(id: number): Order {
     ...(row as unknown as Order),
     isHeld: Boolean((row as { isHeld: number }).isHeld),
     stockDeducted: Boolean((row as { stockDeducted: number }).stockDeducted),
+    offerName: offerNameOf((row as { offerId: number | null }).offerId),
     items,
     payments: payments as Order['payments'],
     history: history as Order['history'],
@@ -318,13 +335,55 @@ export function removeItem(itemId: number): Order {
 export function setDiscount(input: { orderId: number; discountCents: number; discountReason: string | null }): Order {
   assertOpen(input.orderId)
   transaction(() => {
-    dbWrite('UPDATE orders SET discountCents = ?, discountReason = ? WHERE id = ?', [
+    /* Typed by hand on purpose, so it replaces whatever offer was on the order. */
+    dbWrite('UPDATE orders SET discountCents = ?, discountReason = ?, offerId = NULL, offerDiscountCents = 0 WHERE id = ?', [
       Math.max(0, Math.floor(input.discountCents || 0)),
       input.discountReason ?? null,
       input.orderId
     ])
     recompute(input.orderId)
   })
+  return buildOrder(input.orderId)
+}
+
+/**
+ * Put an offer on the order, or let the program pick the one that saves the
+ * customer the most. Passing no offer and `auto: false` takes the offer off.
+ */
+export function applyOffer(input: { orderId: number; offerId?: number | null; auto?: boolean }): Order {
+  assertOpen(input.orderId)
+  transaction(() => {
+    let offerId: number | null = null
+    let discountCents = 0
+    let reason: string | null = null
+
+    if (input.offerId) {
+      const offer = getOffer(input.offerId)
+      const live = isLive(offer)
+      if (!live.live) throw new AppError('VALIDATION', `Offer not available: ${live.reason}`)
+      discountCents = discountFor(offer, input.orderId)
+      if (discountCents <= 0) throw new AppError('VALIDATION', 'This offer does not apply to the order')
+      offerId = offer.id
+      reason = offer.nameAr
+    } else if (input.auto !== false) {
+      const best = bestOffer(input.orderId)
+      if (best) {
+        offerId = best.offer.id
+        discountCents = best.discountCents
+        reason = best.offer.nameAr
+      }
+    }
+
+    dbWrite('UPDATE orders SET offerId = ?, offerDiscountCents = ?, discountCents = ?, discountReason = ? WHERE id = ?', [
+      offerId,
+      discountCents,
+      discountCents,
+      reason,
+      input.orderId
+    ])
+    recompute(input.orderId)
+  })
+  writeAudit('orders.offer', 'order', input.orderId, { offerId: input.offerId ?? null })
   return buildOrder(input.orderId)
 }
 
@@ -423,6 +482,9 @@ export function payOrder(input: {
       setTableStatus((order as { tableId: number | null }).tableId, 'free')
       /* Recipes consume their ingredients the moment the sale is final. */
       consumeStockForOrder(input.orderId, session.userId)
+      /* A capped offer really runs out, and the customer gets their points. */
+      markOfferUsed(dbGet<{ offerId: number | null }>('SELECT offerId FROM orders WHERE id = ?', [input.orderId])?.offerId)
+      earnForOrder(input.orderId, session.userId)
       /* Seal the sale: sequential fiscal number + chained hash. */
       sealOrder(input.orderId)
     }
@@ -443,6 +505,8 @@ export function cancelOrder(input: { orderId: number; reason: string; stockPolic
     ])
     setTableStatus((order as { tableId: number | null }).tableId, 'free')
     if (input.stockPolicy === 'restore') restoreStockForOrder(input.orderId, currentUserId())
+    releaseOfferUse((order as { offerId: number | null }).offerId)
+    reverseForOrder(input.orderId, currentUserId())
   })
   writeAudit('orders.cancel', 'order', input.orderId, { reason: input.reason, stockPolicy: input.stockPolicy ?? null })
   return buildOrder(input.orderId)

@@ -6,6 +6,7 @@ import {
   Merge,
   MoveRight,
   Pause,
+  Gift,
   Percent,
   Play,
   Printer,
@@ -28,8 +29,10 @@ import {
   Button,
   Card,
   EmptyState,
+  ErrorBox,
   Field,
   Input,
+  Loading,
   Modal,
   Money,
   PageHeader,
@@ -38,6 +41,7 @@ import {
   Textarea
 } from '../components/ui'
 import { kitchenTicketHtml, receiptHtml } from '@shared/receipts'
+import type { Offer, OfferOffer } from '@shared/types'
 
 interface DraftLine {
   key: string
@@ -69,6 +73,8 @@ export default function PosPage() {
   const [itemTarget, setItemTarget] = useState<Product | null>(null)
   const [payOpen, setPayOpen] = useState(false)
   const [discountOpen, setDiscountOpen] = useState(false)
+  const [offersOpen, setOffersOpen] = useState(false)
+  const [loyaltyOpen, setLoyaltyOpen] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
   const [heldOpen, setHeldOpen] = useState(false)
   const [moveOpen, setMoveOpen] = useState(false)
@@ -787,8 +793,21 @@ export default function PosPage() {
             </div>
             {order && order.discountCents > 0 ? (
               <div className="flex items-center justify-between text-xs text-red-500">
-                <span>{t('common.discount')}{order.discountReason ? ` · ${order.discountReason}` : ''}</span>
-                <Money cents={-order.discountCents} />
+                <span className="inline-flex items-center gap-1">
+                  {order.offerId ? <Percent className="h-3 w-3" /> : null}
+                  {order.offerName ?? t('common.discount')}
+                  {!order.offerId && order.discountReason ? ` · ${order.discountReason}` : ''}
+                </span>
+                <Money cents={-(order.discountCents - order.loyaltyDiscountCents)} />
+              </div>
+            ) : null}
+            {order && order.loyaltyDiscountCents > 0 ? (
+              <div className="flex items-center justify-between text-xs text-accent-600 dark:text-accent-300">
+                <span className="inline-flex items-center gap-1">
+                  <Gift className="h-3 w-3" />
+                  {order.loyaltyPointsRedeemed} {t('loyalty.points')}
+                </span>
+                <Money cents={-order.loyaltyDiscountCents} />
               </div>
             ) : null}
             {order && order.taxCents > 0 ? (
@@ -862,6 +881,12 @@ export default function PosPage() {
                 onClick={() => setDiscountOpen(true)}
               >
                 {t('pos.discount')}
+              </Button>
+              <Button variant="ghost" size="sm" icon={Percent} disabled={!order || closed} onClick={() => setOffersOpen(true)}>
+                {t('offers.tab')}
+              </Button>
+              <Button variant="ghost" size="sm" icon={Gift} disabled={!order || closed} onClick={() => setLoyaltyOpen(true)}>
+                {t('loyalty.redeem')}
               </Button>
             </div>
 
@@ -948,6 +973,28 @@ export default function PosPage() {
           setDiscountOpen(false)
         }}
       />
+
+      {offersOpen && order ? (
+        <OfferPicker
+          order={order}
+          onClose={() => setOffersOpen(false)}
+          onApplied={(updated) => {
+            setOrder(updated)
+            setOffersOpen(false)
+          }}
+        />
+      ) : null}
+
+      {loyaltyOpen && order ? (
+        <LoyaltySheet
+          order={order}
+          onClose={() => setLoyaltyOpen(false)}
+          onDone={(updated) => {
+            setOrder(updated)
+            setLoyaltyOpen(false)
+          }}
+        />
+      ) : null}
 
       <CancelModal
         open={cancelOpen}
@@ -1628,6 +1675,169 @@ function HeldModal({
           ))}
         </ul>
       )}
+    </Modal>
+  )
+}
+
+/** Every offer measured against this order, so the cashier picks with the
+ *  saving in front of them and sees why a rule does not apply. */
+function OfferPicker({
+  order,
+  onClose,
+  onApplied
+}: {
+  order: Order
+  onClose: () => void
+  onApplied: (order: Order) => void
+}) {
+  const { t, language } = useT()
+  const settings = useAppStore((state) => state.settings)
+  const currency = settings?.currency ?? 'DZD'
+  const measured = useApi<OfferOffer[]>(() => api.offers.forOrder(order.id), [order.id])
+  const [busy, setBusy] = useState<number | 'none' | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const name = (offer: Offer) => (language === 'ar' ? offer.nameAr : offer.nameFr)
+
+  const apply = async (offerId: number | null) => {
+    setBusy(offerId ?? 'none')
+    setError(null)
+    try {
+      onApplied(await api.offers.apply(order.id, offerId, offerId === null ? false : true))
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'UNEXPECTED_ERROR')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const rows = measured.data ?? []
+  return (
+    <Modal open title={t('offers.tab')} onClose={onClose} size="md">
+      <div className="space-y-2">
+        {error ? <ErrorBox code={error} /> : null}
+        {measured.loading && !measured.data ? <Loading /> : null}
+        {!measured.loading && rows.length === 0 ? <EmptyState icon={Percent} title={t('offers.empty')} /> : null}
+
+        {rows.map((entry) => (
+          <button
+            key={entry.offer.id}
+            type="button"
+            disabled={!entry.eligible || busy !== null}
+            onClick={() => void apply(entry.offer.id)}
+            className={`flex w-full items-center justify-between gap-3 rounded-xl border p-3 text-start transition-colors ${
+              order.offerId === entry.offer.id
+                ? 'border-brand-500 bg-brand-50 dark:border-brand-500/60 dark:bg-brand-500/10'
+                : entry.eligible
+                  ? 'border-ink-200 hover:border-brand-400 dark:border-ink-700'
+                  : 'border-ink-200 opacity-55 dark:border-ink-800'
+            }`}
+          >
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold text-ink-800 dark:text-ink-100">{name(entry.offer)}</span>
+              <span className="block text-[11px] text-ink-500">
+                {entry.eligible ? t('offers.saves') : t(`offers.reason.${entry.reason ?? 'noMatch'}`)}
+              </span>
+            </span>
+            {entry.eligible ? (
+              <span className="num shrink-0 font-bold text-accent-700 dark:text-accent-300" dir="ltr">
+                −{formatMoney(entry.discountCents, currency, 0)}
+              </span>
+            ) : null}
+          </button>
+        ))}
+
+        {order.offerId ? (
+          <Button variant="secondary" className="w-full" loading={busy === 'none'} onClick={() => void apply(null)}>
+            {t('offers.none')}
+          </Button>
+        ) : null}
+      </div>
+    </Modal>
+  )
+}
+
+/** Turning a customer's points into money off, before the payment. */
+function LoyaltySheet({ order, onClose, onDone }: { order: Order; onClose: () => void; onDone: (order: Order) => void }) {
+  const { t } = useT()
+  const settings = useAppStore((state) => state.settings)
+  const currency = settings?.currency ?? 'DZD'
+  const rules = useApi(() => api.loyalty.rules(), [])
+  const balance = useApi(() => (order.customerId ? api.loyalty.balance(order.customerId) : Promise.resolve({ points: 0 })), [order.customerId])
+  const [points, setPoints] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const available = balance.data?.points ?? 0
+  const value = rules.data?.pointValueCents ?? 0
+  const asked = Math.max(0, Math.floor(Number(points || '0')))
+
+  const run = async (action: () => Promise<unknown>) => {
+    setBusy(true)
+    setError(null)
+    try {
+      await action()
+      onDone(await api.orders.get(order.id))
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'UNEXPECTED_ERROR')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!order.customerId) {
+    return (
+      <Modal open title={t('loyalty.redeem')} onClose={onClose} size="sm">
+        <EmptyState icon={Gift} title={t('loyalty.needCustomer')} />
+      </Modal>
+    )
+  }
+
+  return (
+    <Modal
+      open
+      title={t('loyalty.redeem')}
+      subtitle={`${t('loyalty.balance')}: ${available} ${t('loyalty.points')}`}
+      onClose={onClose}
+      size="sm"
+      footer={
+        <>
+          {order.loyaltyPointsRedeemed > 0 ? (
+            <Button variant="secondary" loading={busy} onClick={() => void run(() => api.loyalty.cancelRedeem(order.id))}>
+              {t('loyalty.cancelRedeem')}
+            </Button>
+          ) : (
+            <Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button>
+          )}
+          <Button
+            loading={busy}
+            disabled={asked <= 0 || asked > available}
+            onClick={() => void run(() => api.loyalty.redeem(order.id, asked))}
+          >
+            {t('loyalty.redeem')}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        {error ? <ErrorBox code={error} /> : null}
+        {rules.data && !rules.data.enabled ? <ErrorBox code="LOYALTY_OFF" /> : null}
+        <Field label={t('loyalty.points')} hint={rules.data ? `${t('loyalty.minRedeem')}: ${rules.data.minRedeem}` : undefined}>
+          <Input type="number" min="0" max={String(available)} dir="ltr" value={points} onChange={(event) => setPoints(event.target.value)} autoFocus />
+        </Field>
+        {asked > 0 ? (
+          <p className="rounded-lg bg-ink-100 px-3 py-2 text-xs text-ink-600 dark:bg-ink-800/70 dark:text-ink-300">
+            {asked} {t('loyalty.points')} {t('loyalty.worth')}{' '}
+            <strong className="num">{formatMoney(Math.min(asked * value, order.subtotalCents), currency, 0)}</strong>
+          </p>
+        ) : null}
+        <div className="flex flex-wrap gap-1.5">
+          {[25, 50, 100, available].filter((n, i, all) => n > 0 && all.indexOf(n) === i && n <= available).map((n) => (
+            <Button key={n} variant="secondary" size="sm" onClick={() => setPoints(String(n))}>
+              {n}
+            </Button>
+          ))}
+        </div>
+      </div>
     </Modal>
   )
 }

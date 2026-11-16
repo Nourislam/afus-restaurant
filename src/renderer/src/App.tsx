@@ -26,6 +26,7 @@ import Delivery from './pages/Delivery'
 import Finance from './pages/Finance'
 import Reports from './pages/Reports'
 import Insight from './pages/Insight'
+import Offers from './pages/Offers'
 
 type Phase = 'loading' | 'setup' | 'login' | 'ready' | 'error'
 
@@ -113,6 +114,7 @@ export default function App() {
           <Route path="/inventory" element={<Inventory />} />
           <Route path="/purchases" element={<Purchases />} />
           <Route path="/customers" element={<Customers />} />
+          <Route path="/offers" element={<Offers />} />
           <Route path="/finance" element={<Finance />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/insight" element={<Insight />} />

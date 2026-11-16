@@ -29,6 +29,10 @@ import type {
   FiscalClosure,
   IntegrityReport,
   LoginProfile,
+  LoyaltyMovement,
+  LoyaltyRules,
+  Offer,
+  OfferOffer,
   RoleRow,
   Supplier,
   SupplierPayment,
@@ -206,6 +210,29 @@ export const api = {
     moveTable: (orderId: number, tableId: number | null) => call<Order>('orders.moveTable', { orderId, tableId }),
     merge: (fromOrderId: number, toOrderId: number) => call<Order>('orders.merge', { fromOrderId, toOrderId }),
     receipt: (orderId: number, language: string, paper: string) => call<{ html: string }>('orders.receipt', { orderId, language, paper })
+  },
+
+  offers: {
+    list: (includeInactive = true) => call<Offer[]>('offers.list', { includeInactive }),
+    get: (id: number) => call<Offer>('offers.get', { id }),
+    save: (input: Record<string, unknown>) => call<Offer>('offers.save', input),
+    setActive: (id: number, active: boolean) => call<Offer>('offers.setActive', { id, active }),
+    remove: (id: number) => call<{ removed: boolean }>('offers.remove', { id }),
+    forOrder: (orderId: number) => call<OfferOffer[]>('offers.forOrder', { orderId }),
+    apply: (orderId: number, offerId?: number | null, auto = true) =>
+      call<Order>('orders.applyOffer', { orderId, offerId: offerId ?? null, auto })
+  },
+
+  loyalty: {
+    rules: () => call<LoyaltyRules>('loyalty.rules'),
+    balance: (customerId: number) => call<{ points: number }>('loyalty.balance', { customerId }),
+    movements: (customerId: number, limit?: number) => call<LoyaltyMovement[]>('loyalty.movements', { customerId, limit }),
+    redeem: (orderId: number, points: number) =>
+      call<{ points: number; discountCents: number; balance: number }>('loyalty.redeem', { orderId, points }),
+    cancelRedeem: (orderId: number) =>
+      call<{ points: number; discountCents: number; balance: number }>('loyalty.cancelRedeem', { orderId }),
+    adjust: (customerId: number, points: number, note?: string | null) =>
+      call<{ points: number }>('loyalty.adjust', { customerId, points, note: note ?? null })
   },
 
   kitchen: {

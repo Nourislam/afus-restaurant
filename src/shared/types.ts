@@ -162,6 +162,11 @@ export interface AppSettings {
   stampMinCents: number
   /** 0 = no cap. */
   stampMaxCents: number
+  /** Loyalty: points per 100 DA, what a point is worth, and the redeem floor. */
+  loyaltyEnabled: boolean
+  loyaltyEarnPer100: number
+  loyaltyPointValueCents: number
+  loyaltyMinRedeem: number
   taxEnabled: boolean
   taxRateBp: number
   taxInclusive: boolean
@@ -172,8 +177,6 @@ export interface AppSettings {
   backupIntervalHours: number
   backupDir: string
   backupKeep: number
-  loyaltyEnabled: boolean
-  loyaltyPointsPerUnit: number
   paymentMethods: string[]
   kitchenAlertMinutes: number
   preorderLeadMinutes: number
@@ -397,6 +400,13 @@ export interface Order {
   covers: number
   /** Stamp duty charged on the cash part of the payment (0 when disabled). */
   stampCents: number
+  /** The offer that produced the discount, when one did. */
+  offerId: number | null
+  offerName: string | null
+  offerDiscountCents: number
+  loyaltyPointsEarned: number
+  loyaltyPointsRedeemed: number
+  loyaltyDiscountCents: number
   /** Sequential fiscal number + hash chain, set once the sale is completed (sealed). */
   fiscalSeq: number | null
   fiscalHash: string | null
@@ -430,6 +440,77 @@ export interface OrderSummary {
   isHeld: boolean
   createdAt: string
   scheduledFor: string | null
+}
+
+/** How an offer takes money off: a share, a fixed sum, a set price, or a free line. */
+export type OfferKind = 'percent' | 'amount' | 'combo' | 'freeItem'
+/** What the offer looks at: the whole order, one category, or one product. */
+export type OfferScope = 'order' | 'category' | 'product'
+
+export interface OfferItem {
+  productId: number
+  nameAr: string
+  nameFr: string
+  qty: number
+}
+
+export interface Offer {
+  id: number
+  nameAr: string
+  nameFr: string
+  kind: OfferKind
+  scope: OfferScope
+  targetId: number | null
+  targetNameAr: string | null
+  targetNameFr: string | null
+  /** Share off, in basis points (2000 = 20 %). */
+  valueBp: number
+  /** Fixed sum off, in centimes. */
+  valueCents: number
+  minSubtotalCents: number
+  comboPriceCents: number
+  /** How many of the matching lines are free (3-for-2 is freeQty 1). */
+  freeQty: number
+  startsOn: string | null
+  endsOn: string | null
+  /** Bit per weekday, Sunday = 1 … Saturday = 64. 127 = every day. */
+  daysMask: number
+  startTime: string | null
+  endTime: string | null
+  usageLimit: number
+  usedCount: number
+  isActive: boolean
+  createdAt: string
+  items: OfferItem[]
+}
+
+/** An offer measured against one order: what it would take off, and why not. */
+export interface OfferOffer {
+  offer: Offer
+  discountCents: number
+  eligible: boolean
+  reason: string | null
+}
+
+export interface LoyaltyMovement {
+  id: number
+  customerId: number
+  orderId: number | null
+  orderNumber: string | null
+  kind: 'earn' | 'redeem' | 'adjust'
+  points: number
+  note: string | null
+  userName: string | null
+  createdAt: string
+}
+
+export interface LoyaltyRules {
+  enabled: boolean
+  /** Points earned per 100 DA spent. */
+  earnPer100: number
+  /** What one point is worth, in centimes. */
+  pointValueCents: number
+  minRedeem: number
 }
 
 export interface Customer {

@@ -32,6 +32,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   ],
   stampMinCents: 500,
   stampMaxCents: 0,
+  loyaltyEnabled: false,
+  loyaltyEarnPer100: 1,
+  loyaltyPointValueCents: 100,
+  loyaltyMinRedeem: 50,
   taxEnabled: false,
   taxRateBp: 0,
   taxInclusive: false,
@@ -42,8 +46,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   backupIntervalHours: 24,
   backupDir: '',
   backupKeep: 30,
-  loyaltyEnabled: false,
-  loyaltyPointsPerUnit: 100,
   paymentMethods: ['cash', 'card'],
   kitchenAlertMinutes: 12,
   preorderLeadMinutes: 30
@@ -75,6 +77,10 @@ const settingsPatchSchema = z
       .max(8),
     stampMinCents: z.number().int().min(0).max(1_000_000),
     stampMaxCents: z.number().int().min(0).max(100_000_000),
+
+    loyaltyEarnPer100: z.number().min(0).max(1000),
+    loyaltyPointValueCents: z.number().int().min(0).max(100_000),
+    loyaltyMinRedeem: z.number().int().min(0).max(1_000_000),
     taxEnabled: z.boolean(),
     taxRateBp: z.number().int().min(0).max(10000),
     taxInclusive: z.boolean(),
@@ -86,7 +92,6 @@ const settingsPatchSchema = z
     backupDir: z.string().max(400),
     backupKeep: z.number().int().min(1).max(365),
     loyaltyEnabled: z.boolean(),
-    loyaltyPointsPerUnit: z.number().int().min(1).max(100000),
     paymentMethods: z.array(z.string().min(1).max(24)).min(1),
     kitchenAlertMinutes: z.number().int().min(1).max(240),
     preorderLeadMinutes: z.number().int().min(0).max(10080)

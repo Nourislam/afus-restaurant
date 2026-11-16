@@ -8,6 +8,7 @@ import { fiscalChannels } from './register/fiscal'
 import { backofficeChannels } from './register/backoffice'
 import { financeChannels } from './register/finance'
 import { systemChannels } from './register/system'
+import { offersChannels } from './register/offers'
 
 /** Registers handlers for every implemented channel (idempotent per process). */
 export function registerIpcHandlers(): { implemented: number; pending: string[] } {
@@ -18,6 +19,7 @@ export function registerIpcHandlers(): { implemented: number; pending: string[] 
   backofficeChannels()
   financeChannels()
   systemChannels()
+  offersChannels()
 
   for (const channel of CHANNELS) {
     ipcMain.handle(channel, (_event, payload: unknown) => dispatch(channel, payload))
