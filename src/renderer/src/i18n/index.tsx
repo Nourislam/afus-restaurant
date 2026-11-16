@@ -39,5 +39,11 @@ export function localized(language: Lang, value: { ar: string; fr: string } | nu
 export function errorText(language: Lang, code: string): string {
   const key = `errors.${code}`
   const translated = translate(language, key)
-  return translated === key ? translate(language, 'common.error') : translated
+  if (translated !== key) return translated
+  /* Nothing is ever a dead end: an unmapped code still shows itself, so the
+     owner can say what happened and it can be traced. A raw sentence from a
+     thrown JavaScript error is shown as it is rather than as a code. */
+  const generic = translate(language, 'common.error')
+  const looksLikeCode = /^[A-Z][A-Z0-9_]{2,}$/.test(code)
+  return looksLikeCode ? `${generic} (${code})` : generic
 }

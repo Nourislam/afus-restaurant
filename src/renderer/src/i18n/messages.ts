@@ -733,6 +733,16 @@ export const MESSAGES: Record<string, Message> = {
 
   'errors.screenTitle': { ar: 'تعذّر عرض هذه الشاشة', fr: 'Cet écran n’a pas pu s’afficher' },
   'errors.screenHint': { ar: 'بقية البرنامج تعمل. أعد المحاولة أو اختر شاشة أخرى من القائمة.', fr: 'Le reste du programme fonctionne. Réessayez ou choisissez un autre écran dans le menu.' },
+  /* Codes the till itself raises before it ever reaches the main process.
+     Without these the cashier was told "an unexpected error" for the most
+     ordinary mistake, such as paying a dine-in order with no table chosen. */
+  'errors.TABLE_REQUIRED': { ar: 'اختر الطاولة أولًا', fr: 'Choisissez d’abord la table' },
+  'errors.DELIVERY_DETAILS_REQUIRED': { ar: 'اكتب اسم الزبون وهاتفه وعنوانه', fr: 'Saisissez le nom, le téléphone et l’adresse du client' },
+  'errors.PREORDER_TIME_REQUIRED': { ar: 'حدّد وقت الطلب المسبق', fr: 'Indiquez l’heure de la précommande' },
+  'errors.INSUFFICIENT_STOCK': { ar: 'الكمية غير متوفرة في المخزون', fr: 'Stock insuffisant' },
+  'errors.NOT_INITIALIZED': { ar: 'لم يُنصَّب البرنامج بعد', fr: 'Le programme n’est pas encore configuré' },
+  'errors.UNEXPECTED_ERROR': { ar: 'حدث خطأ غير متوقع', fr: 'Une erreur inattendue est survenue' },
+  'errors.PRINT_FAILED': { ar: 'تمّت العملية، لكن الطباعة لم تنجح', fr: 'Opération effectuée, mais l’impression a échoué' },
   'errors.DISCOUNT_EXCEEDS_TOTAL': { ar: 'التخفيض أكبر من المبلغ', fr: 'La remise dépasse le total' },
   'errors.INVALID_PAYMENT_AMOUNT': { ar: 'مبلغ الدفع غير صالح', fr: 'Montant de paiement invalide' },
   'errors.MODIFIER_MIN_NOT_MET': { ar: 'اختر الإضافات المطلوبة', fr: 'Choisissez les options requises' },

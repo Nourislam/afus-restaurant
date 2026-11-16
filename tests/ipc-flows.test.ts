@@ -125,6 +125,50 @@ describe('taking a payment, exactly as the screen does it', () => {
     expect(receipt.html).toContain('وصل الزبون')
   })
 
+it('survives the sequences a till really goes through', async () => {
+    const product = firstProduct()
+    const table = firstTable()
+
+    /* Dine-in: opened on a table, sent, added to, sent again, then paid. */
+    const dineIn = await call('orders.create', { type: 'dineIn', tableId: table.id, covers: 2, items: [{ productId: product.id, qty: 1 }] })
+    await call('orders.sendToKitchen', { orderId: dineIn.id })
+    await call('orders.addItem', { orderId: dineIn.id, productId: product.id, qty: 1 })
+    /* Sending again must not fail just because some lines already went. */
+    await call('orders.sendToKitchen', { orderId: dineIn.id })
+    const current = await call('orders.get', { id: dineIn.id })
+    const half = Math.floor(current.totalCents / 2)
+    await call('orders.pay', { orderId: dineIn.id, payments: [{ method: 'cash', amountCents: half }] })
+    const settled = await call('orders.pay', { orderId: dineIn.id, payments: [{ method: 'card', amountCents: current.totalCents - half }] })
+    expect(settled.status).toBe('completed')
+    /* Paying an order that is already settled is refused, not crashed. */
+    expect(await failure('orders.pay', { orderId: dineIn.id, payments: [{ method: 'cash', amountCents: 100 }] })).toBe('CONFLICT')
+    expect(await failure('orders.sendToKitchen', { orderId: dineIn.id })).toBe('CONFLICT')
+
+    /* Delivery: carries its own details, and is paid on arrival. */
+    const delivery = await call('orders.create', {
+      type: 'delivery',
+      items: [{ productId: product.id, qty: 1 }],
+      delivery: { customerName: 'Nadia', phone: '0661', address: 'Rue 5', feeCents: 15_000 }
+    })
+    await call('orders.sendToKitchen', { orderId: delivery.id })
+    expect((await call('orders.pay', { orderId: delivery.id, payments: [{ method: 'cash', amountCents: delivery.totalCents }] })).status).toBe('completed')
+
+    /* A pre-order scheduled for later. */
+    const preorder = await call('orders.create', {
+      type: 'preorder',
+      scheduledFor: '2026-12-31 20:00:00',
+      items: [{ productId: product.id, qty: 3 }]
+    })
+    await call('orders.sendToKitchen', { orderId: preorder.id })
+    expect((await call('orders.pay', { orderId: preorder.id, payments: [{ method: 'cash', amountCents: preorder.totalCents }] })).status).toBe('completed')
+
+    /* And the ticket each one prints is built without throwing. */
+    for (const id of [dineIn.id, delivery.id, preorder.id]) {
+      const receipt = await call('orders.receipt', { orderId: id, language: 'ar', paper: '80' })
+      expect(receipt.html.length).toBeGreaterThan(200)
+    }
+  })
+
   it('accepts a split payment and a card payment', async () => {
     const product = firstProduct()
     const order = await call('orders.create', { type: 'takeaway', items: [{ productId: product.id, qty: 1 }] })

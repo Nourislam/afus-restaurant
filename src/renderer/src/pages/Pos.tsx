@@ -315,14 +315,23 @@ export default function PosPage() {
     const target = await ensureOrder()
     if (!target || !settings) return
     setBusy('send')
+    let updated: Order
     try {
-      const updated = await api.orders.sendToKitchen(target.id)
-      setOrder(updated)
-      flash(t('pos.orderCreated'))
-      await print(kitchenTicketHtml(updated, settings, language), false)
-      void tableMap.reload()
+      updated = await api.orders.sendToKitchen(target.id)
     } catch (caught) {
       flash(errorText(language, caught instanceof Error ? caught.message : 'UNEXPECTED_ERROR'), 'error')
+      setBusy(null)
+      return
+    }
+    /* The kitchen has the order. A ticket that will not print is a separate
+       problem and must not be reported as a failure to send. */
+    setOrder(updated)
+    flash(t('pos.orderCreated'))
+    void tableMap.reload()
+    try {
+      await print(kitchenTicketHtml(updated, settings, language), false)
+    } catch {
+      flash(errorText(language, 'PRINT_FAILED'), 'error')
     } finally {
       setBusy(null)
     }
@@ -959,10 +968,16 @@ export default function PosPage() {
             if (updated.dueCents <= 0) {
               /* Thank the customer on their own screen before the till resets. */
               void api.display.push({ order: updated, done: true }).catch(() => undefined)
-              if (printReceiptFlag && settings) {
-                await print(receiptHtml(updated, settings, language, settings.paperWidth), false)
-              }
+              /* The money is in. A receipt that will not print is a printing
+                 problem, never a reason to tell the cashier the sale failed. */
               flash(t('pos.paid'))
+              if (printReceiptFlag && settings) {
+                try {
+                  await print(receiptHtml(updated, settings, language, settings.paperWidth), false)
+                } catch {
+                  flash(errorText(language, 'PRINT_FAILED'), 'error')
+                }
+              }
               resetAll()
             } else {
               flash(t('common.saved'))
