@@ -1,36 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { clsx } from 'clsx'
-import {
-  BarChart3,
-  FileText,
-  Bike,
-  BookOpen,
-  CalendarClock,
-  ChefHat,
-  Flame,
-  Globe,
-  KeyRound,
-  LayoutDashboard,
-  Lightbulb,
-  Moon,
-  Package,
-  Percent,
-  ReceiptText,
-  ShieldCheck,
-  ShoppingCart,
-  Sun,
-  Truck,
-  Users,
-  UtensilsCrossed,
-  Wallet
-} from 'lucide-react'
+import { KeyRound, Moon, Sun } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAppStore } from '../store/app'
 import { useT } from '../i18n'
 import { AfusMark } from './AfusLogo'
 import { TitleBar } from './TitleBar'
 import { Sidebar, type NavItem } from './Sidebar'
+import { NAV, type NavEntry } from '../lib/navigation'
 import { ErrorBoundary } from './ErrorBoundary'
 import { Button, Field, Input, Modal, Spinner } from './ui'
 
@@ -106,34 +84,20 @@ export function AppShell() {
     }
   }
 
-  /* The service floor first, then the back office, then the figures. Groups are
-     split by hairlines in the menu, so no label eats a line. */
-  const service: NavItem[] = [
-    { to: '/', label: t('nav.dashboard'), icon: LayoutDashboard, permission: 'dashboard.view', exact: true },
-    { to: '/pos', label: t('nav.pos'), icon: ShoppingCart, permission: 'pos.use' },
-    { to: '/tables', label: t('nav.tables'), icon: UtensilsCrossed, permission: ['tables.manage', 'pos.use'] },
-    { to: '/kitchen', label: t('nav.kitchen'), icon: Flame, permission: 'kitchen.view' },
-    { to: '/orders', label: t('nav.orders'), icon: ReceiptText, permission: 'orders.view' },
-    { to: '/reservations', label: t('nav.reservations'), icon: CalendarClock, permission: 'reservations.manage' },
-    { to: '/delivery', label: t('nav.delivery'), icon: Bike, permission: 'delivery.manage' }
-  ]
-  const backOffice: NavItem[] = [
-    { to: '/menu', label: t('nav.menu'), icon: BookOpen, permission: 'menu.view' },
-    { to: '/recipes', label: t('nav.recipes'), icon: ChefHat, permission: 'recipes.view' },
-    { to: '/inventory', label: t('nav.inventory'), icon: Package, permission: 'inventory.view' },
-    { to: '/purchases', label: t('nav.purchases'), icon: Truck, permission: 'purchases.view' },
-    { to: '/customers', label: t('nav.customers'), icon: Users, permission: 'customers.manage' },
-    { to: '/offers', label: t('nav.offers'), icon: Percent, permission: 'menu.view' },
-    { to: '/website', label: t('web.nav'), icon: Globe, permission: 'settings.manage' },
-    { to: '/employees', label: t('nav.employees'), icon: ShieldCheck, permission: 'employees.manage' }
-  ]
-  const figures: NavItem[] = [
-    { to: '/invoices', label: t('nav.invoices'), icon: FileText, permission: 'orders.view' },
-    { to: '/finance', label: t('nav.finance'), icon: Wallet, permission: 'finance.view' },
-    { to: '/reports', label: t('nav.reports'), icon: BarChart3, permission: 'reports.view' },
-    { to: '/insight', label: t('nav.insight'), icon: Lightbulb, permission: 'insight.view' }
-  ]
-  const groups = simpleMode ? [service] : [service, backOffice, figures]
+  /* One list for the menu and for the route guards, so a screen can never be
+     offered here and refused there. In simple mode the floor staff see only
+     the service block. */
+  const groups = useMemo(() => {
+    const of = (group: NavEntry['group']): NavItem[] =>
+      NAV.filter((entry) => entry.group === group).map((entry) => ({
+        to: entry.to,
+        label: t(entry.labelKey),
+        icon: entry.icon,
+        permission: entry.permission,
+        exact: entry.exact
+      }))
+    return simpleMode ? [of('service')] : [of('service'), of('backOffice'), of('figures')]
+  }, [simpleMode, t])
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-ink-100 dark:bg-ink-950">

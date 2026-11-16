@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Route, Routes } from 'react-router-dom'
 import { AppShell, SplashScreen } from './components/layout'
 import { Button } from './components/ui'
 import { ApiError, api } from './lib/api'
@@ -29,12 +29,15 @@ import Insight from './pages/Insight'
 import Offers from './pages/Offers'
 import Invoices from './pages/Invoices'
 import CustomerDisplay from './pages/CustomerDisplay'
+import { HomeRedirect, Protected } from './components/Protected'
+import { homePathFor, permissionFor } from './lib/navigation'
 
 type Phase = 'loading' | 'setup' | 'login' | 'ready' | 'error'
 
 export default function App() {
   const { t, language } = useT()
   const theme = useAppStore((state) => state.theme)
+  const user = useAppStore((state) => state.user)
   const setUser = useAppStore((state) => state.setUser)
   const setSettings = useAppStore((state) => state.setSettings)
   const [phase, setPhase] = useState<Phase>('loading')
@@ -82,8 +85,20 @@ export default function App() {
       return
     }
     setSettings(await api.getSettings())
+    /* A cook has no dashboard: send them where they can actually work, rather
+       than to a screen that answers them with a refusal. The router keeps its
+       own location, so it has to be told the address changed. */
+    window.history.replaceState({}, '', homePathFor(session.permissions))
+    window.dispatchEvent(new PopStateEvent('popstate'))
     setPhase('ready')
   }, [setSettings, setUser])
+
+  /* The session can end from anywhere — the menu's Logout, or an account that
+     was disabled while it was open. Whatever ends it, the program must come
+     back to the login screen instead of staying in a shell with nobody in it. */
+  useEffect(() => {
+    if (phase === 'ready' && !user) setPhase('login')
+  }, [phase, user])
 
   if (phase === 'loading') return <SplashScreen message={t('common.loading')} />
 
@@ -105,28 +120,31 @@ export default function App() {
         {/* Its own window, with no menu and no title bar. */}
         <Route path="/customer-display" element={<CustomerDisplay />} />
         <Route element={<AppShell />}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/tables" element={<Tables />} />
-          <Route path="/pos" element={<Pos />} />
-          <Route path="/kitchen" element={<Kitchen />} />
-          <Route path="/orders" element={<Orders />} />
-          <Route path="/orders/:id" element={<OrderDetail />} />
-          <Route path="/reservations" element={<Reservations />} />
-          <Route path="/delivery" element={<Delivery />} />
-          <Route path="/menu" element={<Menu />} />
-          <Route path="/recipes" element={<Recipes />} />
-          <Route path="/inventory" element={<Inventory />} />
-          <Route path="/purchases" element={<Purchases />} />
-          <Route path="/customers" element={<Customers />} />
-          <Route path="/offers" element={<Offers />} />
-          <Route path="/invoices" element={<Invoices />} />
-          <Route path="/finance" element={<Finance />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/insight" element={<Insight />} />
-          <Route path="/website" element={<Website />} />
-          <Route path="/employees" element={<Employees />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          {/* Generated from the one navigation list, so a screen can never be
+              offered in the menu and left unguarded, or the reverse. */}
+          <Route path="/" element={<Protected permission={permissionFor('/')}><Dashboard /></Protected>} />
+          <Route path="/pos" element={<Protected permission={permissionFor('/pos')}><Pos /></Protected>} />
+          <Route path="/tables" element={<Protected permission={permissionFor('/tables')}><Tables /></Protected>} />
+          <Route path="/kitchen" element={<Protected permission={permissionFor('/kitchen')}><Kitchen /></Protected>} />
+          <Route path="/orders" element={<Protected permission={permissionFor('/orders')}><Orders /></Protected>} />
+          <Route path="/orders/:id" element={<Protected permission={permissionFor('/orders/:id')}><OrderDetail /></Protected>} />
+          <Route path="/reservations" element={<Protected permission={permissionFor('/reservations')}><Reservations /></Protected>} />
+          <Route path="/delivery" element={<Protected permission={permissionFor('/delivery')}><Delivery /></Protected>} />
+          <Route path="/menu" element={<Protected permission={permissionFor('/menu')}><Menu /></Protected>} />
+          <Route path="/recipes" element={<Protected permission={permissionFor('/recipes')}><Recipes /></Protected>} />
+          <Route path="/inventory" element={<Protected permission={permissionFor('/inventory')}><Inventory /></Protected>} />
+          <Route path="/purchases" element={<Protected permission={permissionFor('/purchases')}><Purchases /></Protected>} />
+          <Route path="/customers" element={<Protected permission={permissionFor('/customers')}><Customers /></Protected>} />
+          <Route path="/offers" element={<Protected permission={permissionFor('/offers')}><Offers /></Protected>} />
+          <Route path="/invoices" element={<Protected permission={permissionFor('/invoices')}><Invoices /></Protected>} />
+          <Route path="/finance" element={<Protected permission={permissionFor('/finance')}><Finance /></Protected>} />
+          <Route path="/reports" element={<Protected permission={permissionFor('/reports')}><Reports /></Protected>} />
+          <Route path="/insight" element={<Protected permission={permissionFor('/insight')}><Insight /></Protected>} />
+          <Route path="/website" element={<Protected permission={permissionFor('/website')}><Website /></Protected>} />
+          <Route path="/employees" element={<Protected permission={permissionFor('/employees')}><Employees /></Protected>} />
+          <Route path="/settings" element={<Protected permission={permissionFor('/settings')}><Settings /></Protected>} />
+          {/* Anywhere else sends the person to a screen they can actually open. */}
+          <Route path="*" element={<HomeRedirect />} />
         </Route>
       </Routes>
     </div>

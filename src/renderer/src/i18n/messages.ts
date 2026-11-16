@@ -78,6 +78,10 @@ export const MESSAGES: Record<string, Message> = {
   'tables.markCleaning': { ar: 'قيد التنظيف', fr: 'En nettoyage' },
   'tables.openOrder': { ar: 'فتح طلب', fr: 'Ouvrir une commande' },
   'tables.openOnIt': { ar: 'طلب مفتوح عليها', fr: 'Commande en cours' },
+  /* ---------- Access ---------- */
+  'access.denied': { ar: 'هذه الشاشة ليست ضمن صلاحياتك', fr: 'Cet écran n’est pas dans vos accès' },
+  'access.deniedHint': { ar: 'اطلب من صاحب المطعم فتحها لحسابك، أو اختر شاشة من القائمة.', fr: 'Demandez au propriétaire de vous l’ouvrir, ou choisissez un écran dans le menu.' },
+  'access.goHome': { ar: 'إلى شاشتي', fr: 'Vers mon écran' },
   /* ---------- The open API (Phase 12) ---------- */
   'api.title': { ar: 'مفاتيح الواجهة البرمجية', fr: 'Clés de l’API' },
   'api.hint': { ar: 'يسمح لبرنامج آخر — محاسبة أو منصة توصيل — بقراءة أرقامك أو إنزال طلب، عبر خادم الموقع نفسه.', fr: 'Permet à un autre logiciel — comptabilité ou plateforme de livraison — de lire vos chiffres ou de déposer une commande, via le serveur du site.' },

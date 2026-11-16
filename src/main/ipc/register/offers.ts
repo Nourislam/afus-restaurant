@@ -57,8 +57,8 @@ export const offersChannels = () =>
     },
 
     /* ---------------- The formal invoice ---------------- */
-    { channel: 'invoices.list', definition: { permission: ['orders.view', 'reports.view'], schema: z.object({ from: day.optional(), to: day.optional(), search: z.string().max(80).optional(), limit: z.number().int().min(1).max(1000).optional() }).passthrough(), handler: (input: Parameters<typeof listInvoices>[0]) => listInvoices(input) } },
-    { channel: 'invoices.get', definition: { permission: 'orders.view', schema: z.object({ id }), handler: (input: { id: number }) => getInvoice(input.id) } },
+    { channel: 'invoices.list', definition: { permission: ['finance.view', 'reports.view'], schema: z.object({ from: day.optional(), to: day.optional(), search: z.string().max(80).optional(), limit: z.number().int().min(1).max(1000).optional() }).passthrough(), handler: (input: Parameters<typeof listInvoices>[0]) => listInvoices(input) } },
+    { channel: 'invoices.get', definition: { permission: ['finance.view', 'reports.view', 'orders.close'], schema: z.object({ id }), handler: (input: { id: number }) => getInvoice(input.id) } },
     { channel: 'invoices.forOrder', definition: { permission: 'orders.view', schema: z.object({ orderId: id }), handler: (input: { orderId: number }) => invoiceForOrder(input.orderId) } },
     { channel: 'invoices.next', definition: { permission: 'orders.view', handler: () => ({ number: nextInvoiceNumber() }) } },
     {
