@@ -18,6 +18,10 @@ import { appPaths } from './../paths'
 import { createOrderAs, listOrders } from './orders'
 import { ensureDefaultBranch, getBranch, listBranches, overrideMap } from './branches'
 import { AppError } from '../utils/errors'
+import { authenticate, type ApiScope } from './apiTokens'
+import { listOrders as listAllOrders } from './orders'
+import { report } from './reports'
+import { listProducts } from './catalog'
 import { renderStorefront, THEMES, type StorefrontBranch, type StorefrontBundle, type StorefrontCategory, type StorefrontData } from './storefront'
 import type { Branch, BranchHours, OrderSummary, WebsiteConfig, WebsiteState, WebsiteTheme as ThemeId } from '@shared/types'
 
@@ -254,7 +258,75 @@ function handle(req: http.IncomingMessage, res: http.ServerResponse): void {
     })
     return
   }
+  /* ---------------- The open API ---------------- */
+  /* Everything under /api/v1 needs a key. It is a separate surface from the
+     storefront above: that one is public by design, this one never is. */
+  if (url.pathname.startsWith('/api/v1/')) return handleApi(req, url, send)
+
   send(404, 'text/plain', 'Not found')
+}
+
+/**
+ * The documented surface another system may use: an accounting package pulling
+ * yesterday's sales, a delivery platform pushing an order in. Read is the
+ * default; writing needs a key that was created with it.
+ */
+function handleApi(
+  req: http.IncomingMessage,
+  url: URL,
+  send: (status: number, type: string, body: string | Buffer) => void
+): void {
+  const json = (status: number, body: unknown) => send(status, 'application/json; charset=utf-8', JSON.stringify(body))
+  const header = req.headers.authorization ?? ''
+  const presented = header.toLowerCase().startsWith('bearer ') ? header.slice(7) : null
+  const auth = authenticate(presented)
+  if (!auth) return json(401, { error: 'UNAUTHORIZED', hint: 'Authorization: Bearer <key>' })
+  const may = (scope: ApiScope) => auth.scopes.includes(scope)
+
+  const path = url.pathname.replace('/api/v1/', '')
+  const from = url.searchParams.get('from')
+  const to = url.searchParams.get('to')
+
+  try {
+    if (req.method === 'GET' && path === 'ping') return json(200, { ok: true, program: 'afus-restaurant', scopes: auth.scopes })
+    if (req.method === 'GET' && path === 'menu') {
+      return json(200, publicData(url.searchParams.get('lang') === 'fr' ? 'fr' : 'ar'))
+    }
+    if (req.method === 'GET' && path === 'products') {
+      return json(200, listProducts({ includeArchived: false }))
+    }
+    if (req.method === 'GET' && path === 'branches') {
+      return json(200, ensureBranches())
+    }
+    if (req.method === 'GET' && path === 'orders') {
+      const limit = Math.min(200, Number(url.searchParams.get('limit') ?? 50) || 50)
+      return json(200, listAllOrders({ limit, status: url.searchParams.get('status') }))
+    }
+    if (req.method === 'GET' && path.startsWith('reports/')) {
+      return json(200, report(path.slice('reports/'.length), from, to))
+    }
+    if (req.method === 'POST' && path === 'orders') {
+      if (!may('write')) return json(403, { error: 'FORBIDDEN', hint: 'This key may only read' })
+      let body = ''
+      req.on('data', (chunk) => {
+        body += chunk
+        if (body.length > 100_000) req.destroy()
+      })
+      req.on('end', () => {
+        try {
+          json(201, placeWebOrder(JSON.parse(body || '{}')))
+        } catch (error) {
+          json(400, { error: error instanceof AppError ? error.code : 'ERROR' })
+        }
+      })
+      return
+    }
+    return json(404, { error: 'NOT_FOUND', hint: 'GET ping, menu, products, branches, orders, reports/<name>; POST orders' })
+  } catch (error) {
+    return json(error instanceof AppError && error.code === 'FORBIDDEN' ? 403 : 400, {
+      error: error instanceof AppError ? error.code : 'ERROR'
+    })
+  }
 }
 
 export function startSite(): Promise<WebsiteConfig> {

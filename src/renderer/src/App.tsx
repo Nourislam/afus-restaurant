@@ -28,6 +28,7 @@ import Reports from './pages/Reports'
 import Insight from './pages/Insight'
 import Offers from './pages/Offers'
 import Invoices from './pages/Invoices'
+import CustomerDisplay from './pages/CustomerDisplay'
 
 type Phase = 'loading' | 'setup' | 'login' | 'ready' | 'error'
 
@@ -101,6 +102,8 @@ export default function App() {
   return (
     <div className="h-full" dir={language === 'ar' ? 'rtl' : 'ltr'}>
       <Routes>
+        {/* Its own window, with no menu and no title bar. */}
+        <Route path="/customer-display" element={<CustomerDisplay />} />
         <Route element={<AppShell />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/tables" element={<Tables />} />

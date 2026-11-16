@@ -5,7 +5,7 @@
  * column name, so services hand domain objects straight to the renderer without
  * a mapping layer (and without the drift that comes with one).
  */
-export const SCHEMA_VERSION = 8
+export const SCHEMA_VERSION = 9
 
 const V1 = `
 CREATE TABLE IF NOT EXISTS roles (
@@ -566,6 +566,23 @@ ALTER TABLE users ADD COLUMN branchId INTEGER REFERENCES branches(id) ON DELETE 
 CREATE INDEX IF NOT EXISTS idx_orders_branch ON orders (branchId);
 `
 
+/* V9 — keys for the open API. Only the hash is stored: a key shown once and
+   never again is the only kind that cannot leak from the database itself. */
+const V9 = `
+CREATE TABLE IF NOT EXISTS api_tokens (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  prefix TEXT NOT NULL,
+  tokenHash TEXT NOT NULL UNIQUE,
+  scopes TEXT NOT NULL DEFAULT 'read',
+  isActive INTEGER NOT NULL DEFAULT 1,
+  lastUsedAt TEXT,
+  useCount INTEGER NOT NULL DEFAULT 0,
+  createdAt TEXT NOT NULL,
+  userId INTEGER REFERENCES users(id)
+);
+`
+
 export const MIGRATIONS: Record<number, string> = {
   1: V1,
   2: V2,
@@ -574,5 +591,6 @@ export const MIGRATIONS: Record<number, string> = {
   5: V5,
   6: V6,
   7: V7,
-  8: V8
+  8: V8,
+  9: V9
 }

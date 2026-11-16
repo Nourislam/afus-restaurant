@@ -74,6 +74,12 @@ export default function PosPage() {
   const [payOpen, setPayOpen] = useState(false)
   const [discountOpen, setDiscountOpen] = useState(false)
   const [offersOpen, setOffersOpen] = useState(false)
+
+  /* The customer watches their own order being built. Failing to reach the
+     display must never interrupt a sale, so the push is fire-and-forget. */
+  useEffect(() => {
+    void api.display.push({ order }).catch(() => undefined)
+  }, [order])
   const [loyaltyOpen, setLoyaltyOpen] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
   const [heldOpen, setHeldOpen] = useState(false)
@@ -951,6 +957,8 @@ export default function PosPage() {
             setOrder(updated)
             setPayOpen(false)
             if (updated.dueCents <= 0) {
+              /* Thank the customer on their own screen before the till resets. */
+              void api.display.push({ order: updated, done: true }).catch(() => undefined)
               if (printReceiptFlag && settings) {
                 await print(receiptHtml(updated, settings, language, settings.paperWidth), false)
               }

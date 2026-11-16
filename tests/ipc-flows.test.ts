@@ -13,6 +13,12 @@ vi.mock('electron', () => ({
     getVersion: () => '1.0.0-test'
   },
   shell: { showItemInFolder: () => undefined, openPath: async () => '' },
+  dialog: { showOpenDialog: async () => ({ canceled: true, filePaths: [] }) },
+  screen: {
+    getPrimaryDisplay: () => ({ id: 1, label: 'Primary', size: { width: 1920, height: 1080 }, bounds: { x: 0, y: 0, width: 1920, height: 1080 } }),
+    getAllDisplays: () => [{ id: 1, label: 'Primary', size: { width: 1920, height: 1080 }, bounds: { x: 0, y: 0, width: 1920, height: 1080 } }],
+    getDisplayMatching: () => ({ id: 1 })
+  },
   BrowserWindow: class {
     static getAllWindows(): unknown[] {
       return []
@@ -197,6 +203,9 @@ describe('every screen can load the data it opens with', () => {
     ['fiscal.verify', {}],
     ['fiscal.closures', {}],
     ['fiscal.archives', {}],
+    ['api.tokens', {}],
+    ['display.state', {}],
+    ['display.screens', {}],
     ['backup.list', {}],
     ['branches.list', {}],
     ['website.state', {}],
@@ -509,6 +518,24 @@ it('seals a year into one encrypted file and opens it again', async () => {
 
     expect((await call('fiscal.archives', {})).length).toBeGreaterThan(0)
     expect((await call('fiscal.deleteArchive', { name: archive.name })).deleted).toBe(true)
+  })
+
+it('hands another program a key, then takes it back', async () => {
+    const made = await call('api.createToken', { name: 'Comptabilité', scopes: ['read'] })
+    expect(made.secret).toMatch(/^afus_/)
+    expect(made.token.scopes).toEqual(['read'])
+    /* The key never appears in the list again. */
+    const listed = await call('api.tokens', {})
+    expect(JSON.stringify(listed)).not.toContain(made.secret)
+    await call('api.setTokenActive', { id: made.token.id, active: false })
+    expect((await call('api.tokens', {})).find((t: any) => t.id === made.token.id).isActive).toBe(false)
+    expect((await call('api.removeToken', { id: made.token.id })).removed).toBe(true)
+  })
+
+  it('runs the backup the owner scheduled, on demand', async () => {
+    const result = await call('backup.runNow', {})
+    expect(result.made).toBe(true)
+    expect((await call('backup.list', {})).some((b: any) => b.kind === 'auto')).toBe(true)
   })
 
   it('takes a backup and lists it', async () => {

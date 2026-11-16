@@ -31,6 +31,7 @@ import type {
   FiscalClosure,
   IntegrityReport,
   LoginProfile,
+  ApiToken,
   Invoice,
   InvoiceBuyer,
   LoyaltyMovement,
@@ -214,6 +215,21 @@ export const api = {
     moveTable: (orderId: number, tableId: number | null) => call<Order>('orders.moveTable', { orderId, tableId }),
     merge: (fromOrderId: number, toOrderId: number) => call<Order>('orders.merge', { fromOrderId, toOrderId }),
     receipt: (orderId: number, language: string, paper: string) => call<{ html: string }>('orders.receipt', { orderId, language, paper })
+  },
+
+  apiKeys: {
+    list: () => call<ApiToken[]>('api.tokens'),
+    create: (name: string, scopes: ('read' | 'write')[]) => call<{ token: ApiToken; secret: string }>('api.createToken', { name, scopes }),
+    setActive: (id: number, active: boolean) => call<ApiToken>('api.setTokenActive', { id, active }),
+    remove: (id: number) => call<{ removed: boolean }>('api.removeToken', { id })
+  },
+
+  display: {
+    state: () => call<{ open: boolean; screenCount: number; screenIndex: number | null }>('display.state'),
+    screens: () => call<{ index: number; label: string; width: number; height: number; primary: boolean }[]>('display.screens'),
+    open: (screenIndex?: number | null) => call<{ open: boolean; screenCount: number; screenIndex: number | null }>('display.open', { screenIndex: screenIndex ?? null }),
+    close: () => call<{ open: boolean; screenCount: number; screenIndex: number | null }>('display.close'),
+    push: (payload: Record<string, unknown>) => call<{ pushed: boolean }>('display.push', payload)
   },
 
   invoices: {
@@ -413,7 +429,9 @@ export const api = {
     create: (name: string) => call<{ backupName: string; path: string }>('backup.create', { name }),
     restore: (name: string) => call<{ restored: boolean }>('backup.restore', { name }),
     delete: (name: string) => call<{ deleted: boolean }>('backup.delete', { name }),
-    reveal: (path: string) => call<string>('backup.reveal', { path })
+    reveal: (path: string) => call<string>('backup.reveal', { path }),
+    chooseFolder: () => call<{ directory: string | null }>('backup.chooseFolder'),
+    runNow: () => call<{ made: boolean; copiedTo: string | null }>('backup.runNow')
   },
 
   web: {

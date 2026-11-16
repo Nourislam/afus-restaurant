@@ -5,7 +5,8 @@ import { seedCoreData } from './db/seed'
 import { appPaths, ensureDirectories } from './paths'
 import { registerIpcHandlers } from './ipc'
 import { autostartWebsite } from './services/website'
-import { autoBackup } from './services/backup'
+import { autoBackup, startBackupSchedule } from './services/backup'
+import { closeDisplayOnQuit } from './services/display'
 import { writeAudit } from './services/audit'
 
 /* Restaurant and office machines vary a lot, and some GPU drivers flood the
@@ -64,12 +65,14 @@ async function bootstrap(): Promise<void> {
   const paths = appPaths()
   ensureDirectories(paths)
   await openDatabase(paths.database)
+  seedCoreData()
+  /* After the seed: the automatic copy reads the owner's schedule from settings. */
   try {
     autoBackup()
+    startBackupSchedule()
   } catch (error) {
     console.warn('[afus] auto backup skipped:', error)
   }
-  seedCoreData()
   const { implemented, pending } = registerIpcHandlers()
   console.info(`[afus] ${implemented} channels ready, ${pending.length} pending: ${pending.slice(0, 6).join(', ')}…`)
   writeAudit('app.start', 'app', null, { version: app.getVersion() })
@@ -85,6 +88,8 @@ app.whenReady().then(bootstrap).catch((error: unknown) => {
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow()
 })
+
+app.on('before-quit', () => closeDisplayOnQuit())
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()

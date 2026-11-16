@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { app } from 'electron'
 import { attestationHtml, closePeriod, computeStamp, fiscalExport, listClosures, verifyIntegrity } from '../../services/fiscal'
 import { archiveYear, deleteArchive, listArchives, verifyArchive } from '../../services/archive'
+import { closeDisplay, displayState, listScreens, openDisplay, pushToDisplay } from '../../services/display'
 import { registerMany } from '../registry'
 
 const dateKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -34,6 +35,30 @@ export const fiscalChannels = () =>
         handler: (input: { language: 'ar' | 'fr' }) => ({ html: attestationHtml(input.language, app.getVersion()) })
       }
     },
+    /* ---------------- The customer display ---------------- */
+    { channel: 'display.state', definition: { permission: ['pos.use', 'settings.manage'], handler: () => displayState() } },
+    { channel: 'display.screens', definition: { permission: ['pos.use', 'settings.manage'], handler: () => listScreens() } },
+    {
+      channel: 'display.open',
+      definition: {
+        permission: ['pos.use', 'settings.manage'],
+        schema: z.object({ screenIndex: z.number().int().min(0).max(8).nullable().optional() }).passthrough(),
+        handler: (input: { screenIndex?: number | null }) => openDisplay(input.screenIndex ?? null)
+      }
+    },
+    { channel: 'display.close', definition: { permission: ['pos.use', 'settings.manage'], handler: () => closeDisplay() } },
+    {
+      channel: 'display.push',
+      definition: {
+        permission: 'pos.use',
+        schema: z.object({}).passthrough(),
+        handler: (input: unknown) => {
+          pushToDisplay(input)
+          return { pushed: true }
+        }
+      }
+    },
+
     {
       channel: 'fiscal.archive',
       definition: {

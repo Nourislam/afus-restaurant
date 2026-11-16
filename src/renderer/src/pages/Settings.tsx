@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Archive, CalendarCheck, DatabaseBackup, Download, FileCheck2, FolderOpen, Lock, Printer, ReceiptText, RotateCcw, Save, ShieldCheck, Store, Trash2 } from 'lucide-react'
-import type { AppSettings, BackupFile, Branch, FiscalArchive, FiscalArchiveReport, FiscalClosure, IntegrityReport, StampBracket } from '@shared/types'
+import { Archive, CalendarCheck, KeyRound, Plug, DatabaseBackup, Download, FileCheck2, FolderOpen, Lock, MonitorOff, MonitorSmartphone, Printer, ReceiptText, RotateCcw, Save, ShieldCheck, Store, Trash2 } from 'lucide-react'
+import type { ApiToken, AppSettings, BackupFile, Branch, FiscalArchive, FiscalArchiveReport, FiscalClosure, IntegrityReport, StampBracket } from '@shared/types'
 import { PAYMENT_METHOD_LABELS } from '@shared/constants'
 import { api } from '../lib/api'
 import { useApi } from '../lib/hooks'
@@ -9,7 +9,7 @@ import { useT } from '../i18n'
 import { useAppStore } from '../store/app'
 import { Badge, Button, Card, Confirm, ErrorBox, Field, Input, PageHeader, Select, Spinner, Tabs, Toggle } from '../components/ui'
 
-type SettingsTab = 'shop' | 'receipt' | 'fiscal' | 'backup'
+type SettingsTab = 'shop' | 'receipt' | 'fiscal' | 'backup' | 'api'
 
 const todayKey = () => new Date().toISOString().slice(0, 10)
 const daToCents = (value: string) => Math.max(0, Math.round(Number(value || '0') * 100))
@@ -42,6 +42,7 @@ export default function Settings() {
   const [restoreTarget, setRestoreTarget] = useState<BackupFile | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<BackupFile | null>(null)
   const [restored, setRestored] = useState(false)
+  const [ranNow, setRanNow] = useState<string | null>(null)
 
   useEffect(() => {
     if (!form && settings) setForm(settings)
@@ -90,6 +91,10 @@ export default function Settings() {
         theme: form.theme,
         paymentMethods: form.paymentMethods,
         currentBranchId: form.currentBranchId,
+        autoBackupEnabled: form.autoBackupEnabled,
+        backupIntervalHours: form.backupIntervalHours,
+        backupDir: form.backupDir,
+        backupKeep: form.backupKeep,
         legalName: form.legalName,
         nif: form.nif,
         nis: form.nis,
@@ -155,7 +160,7 @@ export default function Settings() {
       <PageHeader
         title={t('nav.settings')}
         actions={
-          tab === 'backup' ? undefined : (
+          tab === 'backup' || tab === 'api' ? undefined : (
             <Button icon={Save} loading={busy} onClick={() => void save()}>
               {t('common.save')}
             </Button>
@@ -169,7 +174,8 @@ export default function Settings() {
             { value: 'shop', label: t('setup.restaurant'), icon: Store },
             { value: 'receipt', label: t('settings.receiptTab'), icon: ReceiptText },
             { value: 'fiscal', label: t('fiscal.title'), icon: ShieldCheck },
-            { value: 'backup', label: t('backup.title'), icon: DatabaseBackup }
+            { value: 'backup', label: t('backup.title'), icon: DatabaseBackup },
+            { value: 'api', label: t('api.title'), icon: Plug }
           ]}
         />
       </PageHeader>
@@ -284,6 +290,8 @@ export default function Settings() {
               <Input value={form.printerName} onChange={(event) => patch({ printerName: event.target.value })} dir="ltr" />
             </Field>
           </div>
+
+          <DisplayControl onError={setError} />
 
           <Field label={t('settings.receiptFooter')}>
             <Input value={form.receiptFooter} onChange={(event) => patch({ receiptFooter: event.target.value })} />
@@ -518,6 +526,71 @@ export default function Settings() {
         {restored ? (
           <p className="rounded-lg border border-accent-200 bg-accent-50 px-3 py-2 text-xs font-semibold text-accent-700 dark:border-accent-700/40 dark:bg-accent-500/10 dark:text-accent-300">{t('backup.restored')}</p>
         ) : null}
+        {/* The schedule, and the folder that takes a copy out of the shop. */}
+        <div className="rounded-lg border border-ink-200 p-3 dark:border-ink-700">
+          <Toggle
+            checked={form.autoBackupEnabled}
+            onChange={(value) => patch({ autoBackupEnabled: value })}
+            label={t('backup.schedule')}
+          />
+          {form.autoBackupEnabled ? (
+            <>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <Field label={t('backup.every')}>
+                  <Input type="number" min="1" max="168" dir="ltr" value={String(form.backupIntervalHours)} onChange={(event) => patch({ backupIntervalHours: Math.max(1, Number(event.target.value || '24')) })} />
+                </Field>
+                <Field label={t('backup.keep')}>
+                  <Input type="number" min="1" max="365" dir="ltr" value={String(form.backupKeep)} onChange={(event) => patch({ backupKeep: Math.max(1, Number(event.target.value || '30')) })} />
+                </Field>
+              </div>
+              <Field label={t('backup.offsite')} hint={t('backup.offsiteHint')} className="mt-3">
+                <div className="flex items-center gap-2">
+                  <Input value={form.backupDir} onChange={(event) => patch({ backupDir: event.target.value })} dir="ltr" placeholder="—" />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={FolderOpen}
+                    onClick={async () => {
+                      const chosen = await api.backup.chooseFolder()
+                      if (chosen.directory) patch({ backupDir: chosen.directory })
+                    }}
+                  >
+                    {t('backup.choose')}
+                  </Button>
+                  {form.backupDir ? (
+                    <Button variant="ghost" size="sm" onClick={() => patch({ backupDir: '' })}>
+                      {t('backup.clear')}
+                    </Button>
+                  ) : null}
+                </div>
+              </Field>
+              <p className="mt-2 text-[11px] text-ink-400">{t('backup.cloudNote')}</p>
+              <div className="mt-2 flex items-center gap-3">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={DatabaseBackup}
+                  loading={backupBusy === 'now'}
+                  onClick={() =>
+                    void runBackup('now', async () => {
+                      const result = await api.backup.runNow()
+                      setRanNow(result.copiedTo ?? '')
+                    })
+                  }
+                >
+                  {t('backup.runNow')}
+                </Button>
+                {ranNow !== null ? (
+                  <span className="text-[11px] text-ink-500">
+                    {ranNow ? `${t('backup.copiedTo')} ` : t('settings.saved')}
+                    {ranNow ? <span className="num font-mono" dir="ltr">{ranNow}</span> : null}
+                  </span>
+                ) : null}
+              </div>
+            </>
+          ) : null}
+        </div>
+
         <div className="flex flex-wrap items-end gap-2">
           <Field label={t('backup.name')} className="min-w-[220px] flex-1">
             <Input value={backupName} onChange={(event) => setBackupName(event.target.value)} placeholder={form.restaurantName} />
@@ -557,6 +630,8 @@ export default function Settings() {
         )}
       </Card>
       ) : null}
+
+      {tab === 'api' ? <ApiKeysCard onError={setError} /> : null}
 
       <Confirm
         open={Boolean(restoreTarget)}
@@ -717,6 +792,231 @@ function ArchiveCard({ onError }: { onError: (code: string | null) => void }) {
       ) : (
         <p className="text-xs text-ink-400">{t('archive.none')}</p>
       )}
+    </Card>
+  )
+}
+
+/** Opening the customer's screen, and choosing which monitor it lives on. */
+function DisplayControl({ onError }: { onError: (code: string | null) => void }) {
+  const { t } = useT()
+  const [state, setState] = useState<{ open: boolean; screenCount: number; screenIndex: number | null } | null>(null)
+  const [screens, setScreens] = useState<{ index: number; label: string; width: number; height: number; primary: boolean }[]>([])
+  const [busy, setBusy] = useState(false)
+
+  const refresh = async () => {
+    try {
+      const [next, list] = await Promise.all([api.display.state(), api.display.screens()])
+      setState(next)
+      setScreens(list)
+    } catch {
+      setState(null)
+    }
+  }
+
+  useEffect(() => {
+    void refresh()
+  }, [])
+
+  const act = async (action: () => Promise<unknown>) => {
+    setBusy(true)
+    onError(null)
+    try {
+      await action()
+      await refresh()
+    } catch (caught) {
+      onError(caught instanceof Error ? caught.message : 'INTERNAL')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!state) return null
+
+  return (
+    <div className="rounded-lg border border-ink-200 p-3 dark:border-ink-700">
+      <p className="afus-label flex items-center gap-2">
+        <MonitorSmartphone className="h-4 w-4" />
+        {t('display.title')}
+      </p>
+      <p className="mb-2 text-xs text-ink-500">{t('display.hint')}</p>
+
+      {screens.length > 1 ? (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {screens.map((entry) => (
+            <button
+              key={entry.index}
+              type="button"
+              aria-pressed={state.screenIndex === entry.index}
+              onClick={() => void act(() => api.display.open(entry.index))}
+              className={
+                state.screenIndex === entry.index
+                  ? 'rounded-full bg-brand-700 px-3 py-1 text-[11px] font-semibold text-white'
+                  : 'rounded-full border border-ink-200 px-3 py-1 text-[11px] font-medium text-ink-500 dark:border-ink-700'
+              }
+            >
+              {t('display.screen')} {entry.index + 1}
+              {entry.primary ? ` · ${t('display.primary')}` : ''}
+              <span className="num ms-1 text-ink-400" dir="ltr">
+                {entry.width}×{entry.height}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="mb-2 text-[11px] text-ink-400">{t('display.oneScreen')}</p>
+      )}
+
+      {state.open ? (
+        <Button variant="secondary" size="sm" icon={MonitorOff} loading={busy} onClick={() => void act(() => api.display.close())}>
+          {t('display.close')}
+        </Button>
+      ) : (
+        <Button variant="secondary" size="sm" icon={MonitorSmartphone} loading={busy} onClick={() => void act(() => api.display.open(null))}>
+          {t('display.open')}
+        </Button>
+      )}
+    </div>
+  )
+}
+
+/** Creating and revoking the keys another program uses to reach this one. */
+function ApiKeysCard({ onError }: { onError: (code: string | null) => void }) {
+  const { t } = useT()
+  const [tokens, setTokens] = useState<ApiToken[]>([])
+  const [name, setName] = useState('')
+  const [write, setWrite] = useState(false)
+  const [secret, setSecret] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [busy, setBusy] = useState<string | null>(null)
+
+  const refresh = async () => setTokens(await api.apiKeys.list())
+  useEffect(() => {
+    void refresh().catch(() => setTokens([]))
+  }, [])
+
+  const run = async (key: string, action: () => Promise<void>) => {
+    setBusy(key)
+    onError(null)
+    try {
+      await action()
+      await refresh()
+    } catch (caught) {
+      onError(caught instanceof Error ? caught.message : 'INTERNAL')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <Card className="max-w-3xl space-y-4 p-5">
+      <div>
+        <h2 className="flex items-center gap-2 text-sm font-bold text-ink-800 dark:text-ink-100">
+          <Plug className="h-4 w-4 text-brand-700" aria-hidden />
+          {t('api.title')}
+        </h2>
+        <p className="mt-1 text-xs text-ink-500">{t('api.hint')}</p>
+        <p className="mt-1 text-[11px] text-ink-400">{t('api.needsSite')}</p>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-2">
+        <Field label={t('api.name')} className="min-w-[200px] flex-1">
+          <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Comptabilité" />
+        </Field>
+        <div className="pb-2">
+          <Toggle checked={write} onChange={setWrite} label={t('api.scopeWrite')} />
+        </div>
+        <Button
+          icon={KeyRound}
+          loading={busy === 'create'}
+          disabled={!name.trim()}
+          onClick={() =>
+            void run('create', async () => {
+              const made = await api.apiKeys.create(name.trim(), write ? ['read', 'write'] : ['read'])
+              setSecret(made.secret)
+              setCopied(false)
+              setName('')
+            })
+          }
+        >
+          {t('api.create')}
+        </Button>
+      </div>
+
+      {secret ? (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-500/40 dark:bg-amber-500/10">
+          <p className="mb-2 text-xs font-semibold text-amber-700 dark:text-amber-300">{t('api.secretOnce')}</p>
+          <div className="flex items-center gap-2">
+            <code className="min-w-0 flex-1 truncate rounded bg-black/10 px-2 py-1 font-mono text-xs dark:bg-black/30" dir="ltr">
+              {secret}
+            </code>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(secret)
+                  setCopied(true)
+                } catch {
+                  setCopied(false)
+                }
+              }}
+            >
+              {copied ? t('api.copied') : t('api.copy')}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {tokens.length ? (
+        <ul className="divide-y divide-ink-100 text-xs dark:divide-ink-800">
+          {tokens.map((token) => (
+            <li key={token.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-semibold text-ink-800 dark:text-ink-100">{token.name}</span>
+                <span className="num block text-ink-400" dir="ltr">
+                  {token.prefix}… · {token.scopes.join(', ')} ·{' '}
+                  {token.useCount > 0 ? `${token.useCount} ${t('api.uses')}` : t('api.never')}
+                </span>
+              </span>
+              <Badge tone={token.isActive ? 'positive' : 'neutral'}>{token.isActive ? t('offers.active') : t('offers.inactive')}</Badge>
+              <span className="flex gap-1">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  loading={busy === `t${token.id}`}
+                  onClick={() => void run(`t${token.id}`, async () => void (await api.apiKeys.setActive(token.id, !token.isActive)))}
+                >
+                  {token.isActive ? t('api.revoke') : t('api.enable')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={Trash2}
+                  aria-label={t('common.delete')}
+                  onClick={() => void run(`d${token.id}`, async () => void (await api.apiKeys.remove(token.id)))}
+                />
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-xs text-ink-400">{t('api.none')}</p>
+      )}
+
+      <div className="rounded-lg bg-ink-100 p-3 dark:bg-ink-800/70">
+        <p className="afus-label">{t('api.endpoints')}</p>
+        <pre className="overflow-x-auto font-mono text-[11px] leading-relaxed text-ink-600 dark:text-ink-300" dir="ltr">
+{`GET  /api/v1/ping
+GET  /api/v1/menu?lang=ar
+GET  /api/v1/products
+GET  /api/v1/branches
+GET  /api/v1/orders?limit=50&status=completed
+GET  /api/v1/reports/sales?from=2026-01-01&to=2026-12-31
+POST /api/v1/orders
+
+Authorization: Bearer afus_…`}
+        </pre>
+      </div>
     </Card>
   )
 }

@@ -1,5 +1,5 @@
 /** SQLite image backups in the user-data folder. */
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { shell } from 'electron'
 import type { BackupFile } from '@shared/types'
@@ -8,6 +8,7 @@ import { AppError } from '../utils/errors'
 import { nowStamp } from '../utils/dates'
 import { appPaths } from '../paths'
 import { writeAudit } from './audit'
+import { getSettings } from './settings'
 
 const SAFE = /^[A-Za-z0-9؀-ۿ _.-]{1,60}$/
 
@@ -78,17 +79,77 @@ export function revealBackup(path: string): string {
   return target
 }
 
-/** Daily automatic copy, called at startup; keeps the last 14. */
-export function autoBackup(): void {
-  const todayKey = nowStamp().slice(0, 10)
-  const existing = listBackups().filter((b) => b.kind === 'auto')
-  if (existing.some((b) => b.name.includes(todayKey))) return
-  write('auto-', 'daily')
-  for (const old of existing.slice(13)) {
+/**
+ * The automatic copy, on the owner's own schedule.
+ *
+ * When a second folder is configured the copy is written there too. That folder
+ * is how a shop gets its data off the machine: point it at a Drive, a OneDrive
+ * or a network share and every automatic backup leaves the building. A first
+ * party cloud would need an account per shop; a synced folder needs nothing and
+ * the owner already understands it.
+ */
+export function autoBackup(force = false): { made: boolean; copiedTo: string | null } {
+  const settings = getSettings()
+  if (!force && !settings.autoBackupEnabled) return { made: false, copiedTo: null }
+
+  const existing = listBackups().filter((entry) => entry.kind === 'auto')
+  const last = existing[0]
+  if (!force && last) {
+    const sinceHours = (Date.now() - new Date(last.createdAt.replace(' ', 'T')).getTime()) / 3_600_000
+    if (Number.isFinite(sinceHours) && sinceHours < settings.backupIntervalHours) return { made: false, copiedTo: null }
+  }
+
+  const result = write('auto-', 'daily')
+
+  /* Keep what the owner asked for, and no more. */
+  const keep = Math.max(1, settings.backupKeep)
+  for (const old of listBackups().filter((entry) => entry.kind === 'auto').slice(keep)) {
     try {
       unlinkSync(old.path)
     } catch {
-      /* ignore */
+      /* a file already gone is not a failure */
     }
   }
+
+  let copiedTo: string | null = null
+  const away = settings.backupDir.trim()
+  if (away) {
+    try {
+      if (!existsSync(away)) mkdirSync(away, { recursive: true })
+      const target = join(away, result.backupName)
+      copyFileSync(result.path, target)
+      copiedTo = target
+      /* The same retention applies to the copies that left the building. */
+      const mine = readdirSync(away)
+        .filter((name) => name.startsWith('auto-') && name.endsWith('.sqlite'))
+        .sort()
+        .reverse()
+      for (const name of mine.slice(keep)) {
+        try {
+          unlinkSync(join(away, name))
+        } catch {
+          /* ignore */
+        }
+      }
+    } catch (error) {
+      /* An unreachable folder must never stop the local backup. */
+      console.warn('[afus] off-site backup copy failed:', error)
+    }
+  }
+  writeAudit('backup.auto', 'backup', result.backupName, { copiedTo })
+  return { made: true, copiedTo }
+}
+
+/** Runs the automatic copy on the owner's interval, for as long as the app lives. */
+export function startBackupSchedule(): () => void {
+  const tick = (): void => {
+    try {
+      autoBackup()
+    } catch (error) {
+      console.warn('[afus] scheduled backup skipped:', error)
+    }
+  }
+  /* Checked hourly; the interval setting decides whether a copy is actually due. */
+  const timer = setInterval(tick, 60 * 60 * 1000)
+  return () => clearInterval(timer)
 }

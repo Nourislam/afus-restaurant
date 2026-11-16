@@ -543,6 +543,19 @@ export interface LoyaltyRules {
 }
 
 /** A formal invoice issued against a completed sale, with its own numbering. */
+/** A key for the open API. Only its hash is stored; the key is shown once. */
+export interface ApiToken {
+  id: number
+  name: string
+  prefix: string
+  scopes: ('read' | 'write')[]
+  isActive: boolean
+  lastUsedAt: string | null
+  useCount: number
+  createdAt: string
+  userName: string | null
+}
+
 export interface Invoice {
   id: number
   orderId: number
