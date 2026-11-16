@@ -313,7 +313,7 @@ export const api = {
   users: {
     list: () => call<UserRow[]>('users.list'),
     roles: () => call<RoleRow[]>('users.roles'),
-    save: (input: { id?: number; fullName: string; roleId: string; phone?: string | null; pin?: string }) =>
+    save: (input: { id?: number; fullName: string; roleId: string; phone?: string | null; pin?: string; branchId?: number | null }) =>
       call<UserRow>('users.save', input),
     setActive: (id: number, active: boolean) => call<{ id: number; isActive: boolean }>('users.setActive', { id, active }),
     resetPin: (id: number, pin: string) => call<{ ok: boolean }>('users.resetPin', { id, pin })
@@ -345,19 +345,20 @@ export const api = {
   },
 
   reports: {
-    sales: (from: string, to: string) => call<unknown>('reports.sales', { from, to }),
-    products: (from: string, to: string) => call<unknown>('reports.products', { from, to }),
-    payments: (from: string, to: string) => call<unknown>('reports.payments', { from, to }),
-    orderTypes: (from: string, to: string) => call<unknown>('reports.orderTypes', { from, to }),
-    expenses: (from: string, to: string) => call<unknown>('reports.expenses', { from, to }),
-    waste: (from: string, to: string) => call<unknown>('reports.waste', { from, to }),
-    staff: (from: string, to: string) => call<unknown>('reports.staff', { from, to }),
-    inventory: (from: string, to: string) => call<unknown>('reports.inventory', { from, to }),
-    purchases: (from: string, to: string) => call<unknown>('reports.purchases', { from, to }),
-    suppliers: (from: string, to: string) => call<unknown>('reports.suppliers', { from, to }),
-    delivery: (from: string, to: string) => call<unknown>('reports.delivery', { from, to }),
-    export: (type: string, from: string, to: string, format: string) =>
-      call<{ filePath: string | null }>('reports.export', { type, from, to, format })
+    sales: (from: string, to: string, branchId?: number | null) => call<unknown>('reports.sales', { from, to, branchId }),
+    products: (from: string, to: string, branchId?: number | null) => call<unknown>('reports.products', { from, to, branchId }),
+    payments: (from: string, to: string, branchId?: number | null) => call<unknown>('reports.payments', { from, to, branchId }),
+    orderTypes: (from: string, to: string, branchId?: number | null) => call<unknown>('reports.orderTypes', { from, to, branchId }),
+    expenses: (from: string, to: string, branchId?: number | null) => call<unknown>('reports.expenses', { from, to, branchId }),
+    waste: (from: string, to: string, branchId?: number | null) => call<unknown>('reports.waste', { from, to, branchId }),
+    staff: (from: string, to: string, branchId?: number | null) => call<unknown>('reports.staff', { from, to, branchId }),
+    inventory: (from: string, to: string, branchId?: number | null) => call<unknown>('reports.inventory', { from, to, branchId }),
+    purchases: (from: string, to: string, branchId?: number | null) => call<unknown>('reports.purchases', { from, to, branchId }),
+    suppliers: (from: string, to: string, branchId?: number | null) => call<unknown>('reports.suppliers', { from, to, branchId }),
+    delivery: (from: string, to: string, branchId?: number | null) => call<unknown>('reports.delivery', { from, to, branchId }),
+    branches: (from: string, to: string) => call<unknown>('reports.branches', { from, to }),
+    export: (type: string, from: string, to: string, format: string, branchId?: number | null) =>
+      call<{ filePath: string | null }>('reports.export', { type, from, to, format, branchId })
   },
 
   insight: {

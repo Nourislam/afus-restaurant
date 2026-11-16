@@ -14,6 +14,7 @@ import { computeStamp, sealOrder } from './fiscal'
 import { consumeStockForOrder, restoreStockForOrder } from './inventory'
 import { bestOffer, discountFor, getOffer, isLive, markOfferUsed, releaseOfferUse } from './offers'
 import { earnForOrder, reverseForOrder } from './loyalty'
+import { resolveBranchFilter, terminalBranchId } from './scope'
 import { postCashMovement } from './finance'
 
 interface CreateItemInput {
@@ -26,6 +27,8 @@ interface CreateItemInput {
 
 export interface CreateOrderInput {
   type: string
+  /** Set by a web order; otherwise the terminal's own branch is used. */
+  branchId?: number | null
   tableId?: number | null
   customerId?: number | null
   covers?: number | null
@@ -246,8 +249,8 @@ export function createOrderAs(actorUserId: number, input: CreateOrderInput): Ord
   transaction(() => {
     const result = dbWrite(
       `INSERT INTO orders
-        (orderNumber, type, status, tableId, customerId, userId, covers, note, scheduledFor, createdAt, updatedAt)
-       VALUES (?, ?, 'new', ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (orderNumber, type, status, tableId, customerId, userId, covers, note, scheduledFor, branchId, createdAt, updatedAt)
+       VALUES (?, ?, 'new', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         nextOrderNumber(),
         input.type,
@@ -257,6 +260,8 @@ export function createOrderAs(actorUserId: number, input: CreateOrderInput): Ord
         Math.max(1, Math.floor(input.covers || 1)),
         input.note ?? null,
         input.scheduledFor ?? null,
+        /* Where it was sold: a web order says so, otherwise this terminal. */
+        input.branchId ?? terminalBranchId(),
         stamp,
         stamp
       ]
@@ -544,9 +549,15 @@ export function getOrder(id: number): Order {
   return buildOrder(id)
 }
 
-export function listOrders(input: { status?: string | null; limit?: number } = {}): OrderSummary[] {
+export function listOrders(input: { status?: string | null; limit?: number; branchId?: number | null } = {}): OrderSummary[] {
   const clauses: string[] = []
   const params: (string | number)[] = []
+  /* A branch only ever sees its own orders, whatever it asks for. */
+  const branch = resolveBranchFilter(input.branchId)
+  if (branch !== null) {
+    clauses.push('o.branchId = ?')
+    params.push(branch)
+  }
   if (input.status === 'open') {
     clauses.push(`o.status IN (${OPEN_STATUSES.map(() => '?').join(',')})`)
     params.push(...OPEN_STATUSES)

@@ -91,7 +91,9 @@ export const coreChannels = () =>
           fullName: z.string().min(1).max(120),
           roleId: z.string().min(1).max(32),
           phone: z.string().max(40).nullish(),
-          pin: z.string().regex(/^\d{4}$/).optional()
+          pin: z.string().regex(/^\d{4}$/).optional(),
+          /* null or absent = head office: this person sees every branch. */
+          branchId: z.number().int().positive().nullish()
         }),
         handler: (input: Parameters<typeof saveUser>[0]) => saveUser(input)
       }

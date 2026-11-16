@@ -78,6 +78,16 @@ export const MESSAGES: Record<string, Message> = {
   'tables.markCleaning': { ar: 'قيد التنظيف', fr: 'En nettoyage' },
   'tables.openOrder': { ar: 'فتح طلب', fr: 'Ouvrir une commande' },
   'tables.openOnIt': { ar: 'طلب مفتوح عليها', fr: 'Commande en cours' },
+  /* ---------- Branch scope (Phase 10) ---------- */
+  'branch.all': { ar: 'كل الفروع', fr: 'Toutes les succursales' },
+  'branch.one': { ar: 'الفرع', fr: 'Succursale' },
+  'branch.headOffice': { ar: 'المقرّ', fr: 'Siège' },
+  'branch.headOfficeHint': { ar: 'يرى كل الفروع ويقارن بينها.', fr: 'Voit toutes les succursales et les compare.' },
+  'branch.terminal': { ar: 'فرع هذا الجهاز', fr: 'Succursale de ce poste' },
+  'branch.terminalHint': { ar: 'كل طلب يُفتح هنا يُنسب إلى هذا الفرع.', fr: 'Chaque commande ouverte ici est rattachée à cette succursale.' },
+  'branch.ofEmployee': { ar: 'فرع الموظف', fr: 'Succursale de l’employé' },
+  'branch.ofEmployeeHint': { ar: 'اتركه فارغًا ليكون من المقرّ ويرى كل الفروع.', fr: 'Laissez vide pour le siège, qui voit toutes les succursales.' },
+  'reports.branches': { ar: 'المقارنة بين الفروع', fr: 'Comparaison des succursales' },
   /* ---------- The formal invoice (Phase 9) ---------- */
   'nav.invoices': { ar: 'الفواتير', fr: 'Factures' },
   'invoices.title': { ar: 'الفواتير', fr: 'Factures' },

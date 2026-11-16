@@ -8,7 +8,7 @@ import { useT } from '../i18n'
 import { useAppStore } from '../store/app'
 import { Button, Card, EmptyState, ErrorBox, Field, Input, Loading, PageHeader, Select } from '../components/ui'
 
-const TYPES = ['sales', 'products', 'payments', 'orderTypes', 'expenses', 'waste', 'staff', 'inventory', 'purchases', 'suppliers', 'delivery'] as const
+const TYPES = ['sales', 'products', 'payments', 'orderTypes', 'expenses', 'waste', 'staff', 'inventory', 'purchases', 'suppliers', 'delivery', 'branches'] as const
 type ReportType = (typeof TYPES)[number]
 
 export default function Reports() {
@@ -19,17 +19,26 @@ export default function Reports() {
   const [type, setType] = useState<ReportType>('sales')
   const [from, setFrom] = useState(monthStart())
   const [to, setTo] = useState(todayString())
+  const [branchId, setBranchId] = useState<number | 'all'>('all')
   const [exported, setExported] = useState<string | null>(null)
+  /* Head office picks a branch; someone tied to one never sees the control,
+     and the service overrides the choice anyway. */
+  const headOffice = (useAppStore.getState().user?.branchId ?? null) === null
+  const branches = useApi(() => (headOffice ? api.branches.list() : Promise.resolve([])), [headOffice])
   const [busy, setBusy] = useState<string | null>(null)
 
-  const report = useApi<ReportTable>(() => api.reports[type](from, to) as Promise<ReportTable>, [type, from, to])
+  const scope = branchId === 'all' ? null : branchId
+  const report = useApi<ReportTable>(
+    () => (type === 'branches' ? api.reports.branches(from, to) : (api.reports[type] as any)(from, to, scope)) as Promise<ReportTable>,
+    [type, from, to, scope]
+  )
   const table = report.data
 
   const doExport = async (format: 'csv' | 'pdf') => {
     setBusy(format)
     setExported(null)
     try {
-      const result = await api.reports.export(type, from, to, format)
+      const result = await api.reports.export(type, from, to, format, scope)
       setExported(result.filePath)
     } finally {
       setBusy(null)
@@ -61,7 +70,7 @@ export default function Reports() {
       />
 
       <Card className="p-4">
-        <div className="grid gap-3 md:grid-cols-[1.4fr_1fr_1fr_auto] md:items-end">
+        <div className="grid gap-3 md:grid-cols-[1.4fr_auto_1fr_1fr_auto] md:items-end">
           <Field label={t('reports.type')}>
             <Select value={type} onChange={(event) => setType(event.target.value as ReportType)}>
               {TYPES.map((item) => (
@@ -69,6 +78,16 @@ export default function Reports() {
               ))}
             </Select>
           </Field>
+          {headOffice && (branches.data?.length ?? 0) > 1 && type !== 'branches' ? (
+            <Field label={t('branch.one')}>
+              <Select value={String(branchId)} onChange={(event) => setBranchId(event.target.value === 'all' ? 'all' : Number(event.target.value))}>
+                <option value="all">{t('branch.all')}</option>
+                {(branches.data ?? []).map((branch) => (
+                  <option key={branch.id} value={branch.id}>{language === 'ar' ? branch.nameAr : branch.nameFr}</option>
+                ))}
+              </Select>
+            </Field>
+          ) : null}
           <Field label={t('common.from')}>
             <Input type="date" dir="ltr" value={from} onChange={(event) => setFrom(event.target.value)} />
           </Field>

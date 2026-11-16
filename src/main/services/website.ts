@@ -213,6 +213,8 @@ function placeWebOrder(payload: WebOrderPayload): { orderNumber: string } {
   const type = payload.type === 'takeaway' ? 'takeaway' : 'delivery'
   const note = `🌐 ${branch.nameAr} · ${name} · ${phone}${payload.note ? ' · ' + payload.note : ''}`
   const order = createOrderAs(systemUserId(), {
+    /* The sale belongs to the branch the customer chose on the site. */
+    branchId: branch.id,
     type,
     note,
     items: items.map((i) => ({ productId: Number(i.productId), qty: Number(i.qty) })),

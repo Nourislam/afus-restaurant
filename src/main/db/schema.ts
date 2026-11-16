@@ -5,7 +5,7 @@
  * column name, so services hand domain objects straight to the renderer without
  * a mapping layer (and without the drift that comes with one).
  */
-export const SCHEMA_VERSION = 7
+export const SCHEMA_VERSION = 8
 
 const V1 = `
 CREATE TABLE IF NOT EXISTS roles (
@@ -558,6 +558,14 @@ CREATE TABLE IF NOT EXISTS invoices (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_invoice_seq ON invoices (year, seq);
 `
 
+/* V8 — which branch a sale belongs to, and which branch a person works for.
+   One tag on the order is what makes every figure separable afterwards. */
+const V8 = `
+ALTER TABLE orders ADD COLUMN branchId INTEGER REFERENCES branches(id) ON DELETE SET NULL;
+ALTER TABLE users ADD COLUMN branchId INTEGER REFERENCES branches(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_orders_branch ON orders (branchId);
+`
+
 export const MIGRATIONS: Record<number, string> = {
   1: V1,
   2: V2,
@@ -565,5 +573,6 @@ export const MIGRATIONS: Record<number, string> = {
   4: V4,
   5: V5,
   6: V6,
-  7: V7
+  7: V7,
+  8: V8
 }

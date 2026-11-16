@@ -21,7 +21,7 @@ interface UserAuthRow {
 
 function findUserById(id: number): UserAuthRow | null {
   return dbGet<UserAuthRow>(
-    `SELECT u.id, u.username, u.fullName, u.roleId, u.pinHash, u.isActive,
+    `SELECT u.id, u.username, u.fullName, u.roleId, u.pinHash, u.isActive, u.branchId,
             r.labelAr, r.labelFr, r.permissions
        FROM users u
        JOIN roles r ON r.id = u.roleId
@@ -54,6 +54,8 @@ export function toSession(row: UserAuthRow): UserSession {
     roleId: row.roleId,
     roleName: row.roleId,
     roleLabel: { ar: row.labelAr, fr: row.labelFr },
+    /* null means head office: this person sees every branch. */
+    branchId: (row as { branchId?: number | null }).branchId ?? null,
     permissions: parsePermissions(row.permissions)
   }
 }

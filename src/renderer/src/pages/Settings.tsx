@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { CalendarCheck, DatabaseBackup, Download, FileCheck2, FolderOpen, Printer, ReceiptText, RotateCcw, Save, ShieldCheck, Store, Trash2 } from 'lucide-react'
-import type { AppSettings, BackupFile, FiscalClosure, IntegrityReport, StampBracket } from '@shared/types'
+import type { AppSettings, BackupFile, Branch, FiscalClosure, IntegrityReport, StampBracket } from '@shared/types'
 import { PAYMENT_METHOD_LABELS } from '@shared/constants'
 import { api } from '../lib/api'
+import { useApi } from '../lib/hooks'
 import { formatDateTime, formatMoney } from '../lib/format'
 import { useT } from '../i18n'
 import { useAppStore } from '../store/app'
@@ -46,6 +47,8 @@ export default function Settings() {
     if (!form && settings) setForm(settings)
   }, [form, settings])
 
+  const branches = useApi<Branch[]>(() => api.branches.list(), [])
+
   useEffect(() => {
     api.fiscal.closures().then(setClosures).catch(() => setClosures([]))
     api.backup.list().then(setBackups).catch(() => setBackups([]))
@@ -86,6 +89,7 @@ export default function Settings() {
         language: form.language,
         theme: form.theme,
         paymentMethods: form.paymentMethods,
+        currentBranchId: form.currentBranchId,
         legalName: form.legalName,
         nif: form.nif,
         nis: form.nis,
@@ -193,6 +197,21 @@ export default function Settings() {
           <Field label={t('settings.address')}>
             <Input value={form.address} onChange={(event) => patch({ address: event.target.value })} />
           </Field>
+          {(branches.data?.length ?? 0) > 0 ? (
+            <Field label={t('branch.terminal')} hint={t('branch.terminalHint')}>
+              <Select
+                value={form.currentBranchId ? String(form.currentBranchId) : ''}
+                onChange={(event) => patch({ currentBranchId: event.target.value ? Number(event.target.value) : null })}
+              >
+                <option value="">—</option>
+                {(branches.data ?? []).map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {language === 'ar' ? branch.nameAr : branch.nameFr}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          ) : null}
           <Field label={t('settings.currency')}>
             <Select value={form.currency} onChange={(event) => patch({ currency: event.target.value })}>
               {['DZD', 'EUR', 'USD', 'MAD', 'TND'].map((code) => (

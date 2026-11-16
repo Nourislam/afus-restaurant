@@ -19,6 +19,8 @@ export type {
 import type { Permission } from './permissions'
 
 export interface UserSession {
+  /** null = head office: sees every branch. */
+  branchId?: number | null
   id: number
   username: string
   fullName: string
@@ -29,6 +31,9 @@ export interface UserSession {
 }
 
 export interface UserRow {
+  /** null = head office: sees every branch. */
+  branchId?: number | null
+  branchName?: string | null
   id: number
   username: string
   fullName: string
@@ -167,6 +172,8 @@ export interface AppSettings {
   loyaltyEarnPer100: number
   loyaltyPointValueCents: number
   loyaltyMinRedeem: number
+  /** Which branch this terminal belongs to; every sale it opens carries it. */
+  currentBranchId: number | null
   taxEnabled: boolean
   taxRateBp: number
   taxInclusive: boolean

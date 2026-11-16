@@ -7,7 +7,7 @@ import { registerMany } from '../registry'
 
 const id = z.number().int().positive()
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
-const rangeSchema = z.object({ from: day.optional(), to: day.optional() }).passthrough()
+const rangeSchema = z.object({ from: day.optional(), to: day.optional(), branchId: id.nullable().optional() }).passthrough()
 const reportType = z.enum(REPORT_TYPES)
 
 export const financeChannels = () =>
@@ -61,14 +61,18 @@ export const financeChannels = () =>
     /* ---------------- Reports ---------------- */
     ...REPORT_TYPES.map((type) => ({
       channel: `reports.${type}` as const,
-      definition: { permission: 'reports.view' as const, schema: rangeSchema, handler: (input: { from?: string; to?: string }) => report(type, input.from, input.to) }
+      definition: {
+        permission: 'reports.view' as const,
+        schema: rangeSchema,
+        handler: (input: { from?: string; to?: string; branchId?: number | null }) => report(type, input.from, input.to, input.branchId)
+      }
     })),
     {
       channel: 'reports.export',
       definition: {
         permission: 'reports.export',
-        schema: z.object({ type: reportType, from: day.optional(), to: day.optional(), format: z.enum(['csv', 'html', 'pdf']) }),
-        handler: async (input: { type: string; from?: string; to?: string; format: 'csv' | 'html' | 'pdf' }) => {
+        schema: z.object({ type: reportType, from: day.optional(), to: day.optional(), format: z.enum(['csv', 'html', 'pdf']), branchId: id.nullable().optional() }),
+        handler: async (input: { type: string; from?: string; to?: string; format: 'csv' | 'html' | 'pdf'; branchId?: number | null }) => {
           const result = exportReport(input)
           if (input.format === 'pdf' && result.html) {
             return exportPdf({ html: result.html, fileName: `${input.type}-${input.from ?? ''}_${input.to ?? ''}.pdf` })

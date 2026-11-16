@@ -192,6 +192,7 @@ describe('every screen can load the data it opens with', () => {
     ['reports.purchases', {}],
     ['reports.suppliers', {}],
     ['reports.delivery', {}],
+    ['reports.branches', {}],
     ['insight.overview', {}],
     ['fiscal.verify', {}],
     ['fiscal.closures', {}],

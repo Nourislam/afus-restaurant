@@ -14,9 +14,11 @@ interface FormState {
   roleId: string
   phone: string
   pin: string
+  /** '' means head office: this person sees every branch. */
+  branchId: string
 }
 
-const EMPTY: FormState = { fullName: '', roleId: 'waiter', phone: '', pin: '' }
+const EMPTY: FormState = { fullName: '', roleId: 'waiter', phone: '', pin: '', branchId: '' }
 const onlyPin = (value: string) => value.replace(/\D/g, '').slice(0, 4)
 
 export default function Employees() {
@@ -24,6 +26,7 @@ export default function Employees() {
   const currentUser = useAppStore((state) => state.user)
   const users = useApi(() => api.users.list(), [])
   const roles = useApi(() => api.users.roles(), [])
+  const branches = useApi(() => api.branches.list(), [])
   const [form, setForm] = useState<FormState | null>(null)
   const [resetFor, setResetFor] = useState<UserRow | null>(null)
   const [resetPin, setResetPin] = useState('')
@@ -50,6 +53,7 @@ export default function Employees() {
         id: form.id,
         fullName: form.fullName.trim(),
         roleId: form.roleId,
+        branchId: form.branchId ? Number(form.branchId) : null,
         phone: form.phone.trim() || null,
         pin: form.pin ? form.pin : undefined
       })
@@ -118,6 +122,16 @@ export default function Employees() {
                   <p className="font-semibold text-ink-800 dark:text-ink-100">{row.fullName}</p>
                 </div>
               )
+            },
+            {
+              key: 'branch',
+              header: t('branch.one'),
+              render: (row) =>
+                row.branchId ? (
+                  <span className="text-xs text-ink-600 dark:text-ink-300">{row.branchName}</span>
+                ) : (
+                  <Badge tone="brand">{t('branch.headOffice')}</Badge>
+                )
             },
             {
               key: 'role',
@@ -205,6 +219,18 @@ export default function Employees() {
                 ))}
               </Select>
             </Field>
+            {(branches.data?.length ?? 0) > 0 ? (
+              <Field label={t('branch.ofEmployee')} hint={t('branch.ofEmployeeHint')}>
+                <Select value={form.branchId} onChange={(event) => setForm({ ...form, branchId: event.target.value })}>
+                  <option value="">{t('branch.headOffice')}</option>
+                  {(branches.data ?? []).map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {language === 'ar' ? branch.nameAr : branch.nameFr}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            ) : null}
             <Field label={t('common.phone')}>
               <Input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} dir="ltr" />
             </Field>

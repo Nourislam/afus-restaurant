@@ -34,8 +34,10 @@ export interface Page<T> {
 
 export function listUsers(): UserRow[] {
   return dbAll<UserRow>(
-    `SELECT u.id, u.username, u.fullName, u.roleId, u.phone, u.isActive, u.lastLoginAt, u.createdAt
-       FROM users u ORDER BY u.isActive DESC, u.fullName COLLATE NOCASE`
+    `SELECT u.id, u.username, u.fullName, u.roleId, u.phone, u.branchId, u.isActive, u.lastLoginAt, u.createdAt,
+            b.nameAr AS branchName
+       FROM users u LEFT JOIN branches b ON b.id = u.branchId
+      ORDER BY u.isActive DESC, u.fullName COLLATE NOCASE`
   )
 }
 
@@ -52,6 +54,8 @@ export function listRoles(): RoleRow[] {
 }
 
 export interface SaveUserInput {
+  /** null or absent = head office. */
+  branchId?: number | null
   id?: number
   fullName: string
   roleId: string
@@ -68,16 +72,18 @@ export function saveUser(input: SaveUserInput): UserRow {
   if (input.id) {
     const existing = dbGet<{ id: number }>('SELECT id FROM users WHERE id = ?', [input.id])
     if (!existing) throw new AppError('NOT_FOUND')
-    dbWrite('UPDATE users SET fullName = ?, roleId = ?, phone = ? WHERE id = ?', [
+    dbWrite('UPDATE users SET fullName = ?, roleId = ?, phone = ?, branchId = ? WHERE id = ?', [
       fullName,
       input.roleId,
       input.phone ?? null,
+      /* null means head office: this person sees every branch. */
+      input.branchId ?? null,
       input.id
     ])
     if (input.pin) setPin(input.id, input.pin)
     writeAudit('users.update', 'user', input.id, { roleId: input.roleId })
     return dbGet<UserRow>(
-      'SELECT id, username, fullName, roleId, phone, isActive, lastLoginAt, createdAt FROM users WHERE id = ?',
+      'SELECT id, username, fullName, roleId, phone, branchId, isActive, lastLoginAt, createdAt FROM users WHERE id = ?',
       [input.id]
     ) as UserRow
   }
@@ -85,12 +91,12 @@ export function saveUser(input: SaveUserInput): UserRow {
   if (!isValidPin(input.pin)) throw new AppError('VALIDATION', `PIN must be ${PIN_LENGTH} digits`)
   const result = dbWrite(
     /* passwordHash is the legacy NOT NULL column; kept empty (PIN sign-in only). */
-    'INSERT INTO users (username, fullName, roleId, phone, passwordHash, pinHash, isActive, createdAt) VALUES (?, ?, ?, ?, ?, ?, 1, ?)',
-    [uniqueUsername(fullName), fullName, input.roleId, input.phone ?? null, '', hashPin(input.pin), nowStamp()]
+    'INSERT INTO users (username, fullName, roleId, phone, branchId, passwordHash, pinHash, isActive, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)',
+    [uniqueUsername(fullName), fullName, input.roleId, input.phone ?? null, input.branchId ?? null, '', hashPin(input.pin), nowStamp()]
   )
   writeAudit('users.create', 'user', result.lastInsertRowid, { roleId: input.roleId })
   return dbGet<UserRow>(
-    'SELECT id, username, fullName, roleId, phone, isActive, lastLoginAt, createdAt FROM users WHERE id = ?',
+    'SELECT id, username, fullName, roleId, phone, branchId, isActive, lastLoginAt, createdAt FROM users WHERE id = ?',
     [result.lastInsertRowid]
   ) as UserRow
 }

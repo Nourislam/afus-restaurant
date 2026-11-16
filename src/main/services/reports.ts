@@ -7,11 +7,12 @@ import { AppError } from '../utils/errors'
 import { dayString, monthStart, nowStamp, today } from '../utils/dates'
 import { appPaths } from '../paths'
 import { getSettings } from './settings'
+import { branchClause, isHeadOffice, resolveBranchFilter } from './scope'
 import { baseValueCents, fromBase, unitFactor } from './units'
 
 type Row = Record<string, string | number | null>
 
-export const REPORT_TYPES = ['sales', 'products', 'payments', 'orderTypes', 'expenses', 'waste', 'staff', 'inventory', 'purchases', 'suppliers', 'delivery'] as const
+export const REPORT_TYPES = ['sales', 'products', 'payments', 'orderTypes', 'expenses', 'waste', 'staff', 'inventory', 'purchases', 'suppliers', 'delivery', 'branches'] as const
 export type ReportType = (typeof REPORT_TYPES)[number]
 
 function range(from?: string | null, to?: string | null): { from: string; to: string; fromTs: string; toTs: string } {
@@ -19,6 +20,10 @@ function range(from?: string | null, to?: string | null): { from: string; to: st
   const t = dayString(to, today())
   return { from: f, to: t, fromTs: `${f} 00:00:00`, toTs: `${t} 23:59:59` }
 }
+
+/** The branch every sales figure below is limited to (null = all of them). */
+let branchFilter: number | null = null
+const branchSql = (alias = 'o') => branchClause(branchFilter, alias)
 
 const sum = (rows: Row[], key: string): number => rows.reduce((acc, row) => acc + Number(row[key] ?? 0), 0)
 
@@ -28,8 +33,8 @@ export function salesReport(from?: string | null, to?: string | null): ReportTab
     `SELECT substr(createdAt, 1, 10) AS date, COUNT(*) AS orders, SUM(subtotalCents) AS grossCents, SUM(discountCents) AS discountCents,
             SUM(taxCents) AS taxCents, SUM(stampCents) AS stampCents, SUM(totalCents) AS totalCents,
             ROUND(AVG(totalCents)) AS averageCents
-       FROM orders WHERE status = 'completed' AND createdAt BETWEEN ? AND ? GROUP BY date ORDER BY date`,
-    [r.fromTs, r.toTs]
+       FROM orders o WHERE o.status = 'completed' AND o.createdAt BETWEEN ? AND ?${branchSql().sql} GROUP BY date ORDER BY date`,
+    [r.fromTs, r.toTs, ...branchSql().params]
   )
   return {
     title: { ar: 'المبيعات اليومية', fr: 'Ventes par jour' },
@@ -54,9 +59,9 @@ export function productsReport(from?: string | null, to?: string | null): Report
             SUM(oi.lineTotalCents) AS revenueCents, SUM(oi.qty * p.costCents) AS costCents,
             SUM(oi.lineTotalCents) - SUM(oi.qty * p.costCents) AS marginCents
        FROM order_items oi JOIN orders o ON o.id = oi.orderId LEFT JOIN products p ON p.id = oi.productId
-      WHERE o.status = 'completed' AND o.createdAt BETWEEN ? AND ? AND oi.status != 'removed'
+      WHERE o.status = 'completed' AND o.createdAt BETWEEN ? AND ? AND oi.status != 'removed'${branchSql().sql}
       GROUP BY oi.productId ORDER BY revenueCents DESC`,
-    [r.fromTs, r.toTs]
+    [r.fromTs, r.toTs, ...branchSql().params]
   ).map((row) => ({ ...row, marginPct: Number(row.revenueCents) > 0 ? Math.round((Number(row.marginCents) * 10_000) / Number(row.revenueCents)) : 0 }))
   return {
     title: { ar: 'المبيعات حسب الصنف', fr: 'Ventes par article' },
@@ -79,8 +84,8 @@ export function paymentsReport(from?: string | null, to?: string | null): Report
   const rows = dbAll<Row>(
     `SELECT p.method, COUNT(*) AS count, SUM(p.amountCents) AS amountCents
        FROM order_payments p JOIN orders o ON o.id = p.orderId
-      WHERE o.status = 'completed' AND p.createdAt BETWEEN ? AND ? GROUP BY p.method ORDER BY amountCents DESC`,
-    [r.fromTs, r.toTs]
+      WHERE o.status = 'completed' AND p.createdAt BETWEEN ? AND ?${branchSql().sql} GROUP BY p.method ORDER BY amountCents DESC`,
+    [r.fromTs, r.toTs, ...branchSql().params]
   )
   return {
     title: { ar: 'طرق الدفع', fr: 'Moyens de paiement' },
@@ -98,8 +103,8 @@ export function orderTypesReport(from?: string | null, to?: string | null): Repo
   const r = range(from, to)
   const rows = dbAll<Row>(
     `SELECT type, COUNT(*) AS orders, SUM(totalCents) AS totalCents, ROUND(AVG(totalCents)) AS averageCents
-       FROM orders WHERE status = 'completed' AND createdAt BETWEEN ? AND ? GROUP BY type ORDER BY totalCents DESC`,
-    [r.fromTs, r.toTs]
+       FROM orders o WHERE o.status = 'completed' AND o.createdAt BETWEEN ? AND ?${branchSql().sql} GROUP BY o.type ORDER BY totalCents DESC`,
+    [r.fromTs, r.toTs, ...branchSql().params]
   )
   return {
     title: { ar: 'أنواع الطلبات', fr: 'Types de commande' },
@@ -166,8 +171,8 @@ export function staffReport(from?: string | null, to?: string | null): ReportTab
     `SELECT u.fullName AS name, COUNT(o.id) AS orders, SUM(o.totalCents) AS totalCents, ROUND(AVG(o.totalCents)) AS averageCents,
             (SELECT COALESCE(SUM(a.minutes), 0) FROM attendance a WHERE a.userId = u.id AND a.clockIn BETWEEN ? AND ?) AS minutes
        FROM users u JOIN orders o ON o.userId = u.id
-      WHERE o.status = 'completed' AND o.createdAt BETWEEN ? AND ? GROUP BY u.id ORDER BY totalCents DESC`,
-    [r.fromTs, r.toTs, r.fromTs, r.toTs]
+      WHERE o.status = 'completed' AND o.createdAt BETWEEN ? AND ?${branchSql().sql} GROUP BY u.id ORDER BY totalCents DESC`,
+    [r.fromTs, r.toTs, r.fromTs, r.toTs, ...branchSql().params]
   )
   return {
     title: { ar: 'أداء الموظفين', fr: 'Performance du personnel' },
@@ -268,8 +273,8 @@ export function deliveryReport(from?: string | null, to?: string | null): Report
             SUM(d.feeCents) AS feesCents, SUM(o.totalCents) AS totalCents,
             ROUND(AVG(CASE WHEN d.deliveredAt IS NOT NULL THEN (julianday(d.deliveredAt) - julianday(o.createdAt)) * 1440 END)) AS avgMinutes
        FROM delivery_info d JOIN orders o ON o.id = d.orderId
-      WHERE o.createdAt BETWEEN ? AND ? GROUP BY d.courier ORDER BY deliveries DESC`,
-    [r.fromTs, r.toTs]
+      WHERE o.createdAt BETWEEN ? AND ?${branchSql().sql} GROUP BY d.courier ORDER BY deliveries DESC`,
+    [r.fromTs, r.toTs, ...branchSql().params]
   )
   return {
     title: { ar: 'التوصيل حسب الموصّل', fr: 'Livraisons par livreur' },
@@ -287,7 +292,52 @@ export function deliveryReport(from?: string | null, to?: string | null): Report
   }
 }
 
-export function report(type: string, from?: string | null, to?: string | null): ReportTable {
+/** Every branch side by side: head office only. */
+export function branchesReport(from?: string | null, to?: string | null): ReportTable {
+  const r = range(from, to)
+  const rows = dbAll<Row>(
+    `SELECT COALESCE(b.nameAr, '—') AS nameAr, COALESCE(b.nameFr, '—') AS nameFr,
+            COUNT(o.id) AS orders, SUM(o.totalCents) AS totalCents,
+            ROUND(AVG(o.totalCents)) AS averageCents, SUM(o.taxCents) AS taxCents,
+            SUM(o.discountCents) AS discountCents
+       FROM orders o LEFT JOIN branches b ON b.id = o.branchId
+      WHERE o.status = 'completed' AND o.createdAt BETWEEN ? AND ?
+      GROUP BY o.branchId ORDER BY totalCents DESC`,
+    [r.fromTs, r.toTs]
+  )
+  return {
+    title: { ar: 'المقارنة بين الفروع', fr: 'Comparaison des succursales' },
+    columns: [
+      { key: 'nameAr', label: { ar: 'الفرع', fr: 'Succursale (AR)' } },
+      { key: 'nameFr', label: { ar: 'الفرع (FR)', fr: 'Succursale' } },
+      { key: 'orders', label: { ar: 'الطلبات', fr: 'Commandes' }, type: 'number' },
+      { key: 'totalCents', label: { ar: 'المبيعات', fr: 'Ventes' }, type: 'money' },
+      { key: 'averageCents', label: { ar: 'متوسط الطلب', fr: 'Panier moyen' }, type: 'money' },
+      { key: 'discountCents', label: { ar: 'التخفيضات', fr: 'Remises' }, type: 'money' },
+      { key: 'taxCents', label: { ar: 'الضريبة', fr: 'TVA' }, type: 'money' }
+    ],
+    rows,
+    totals: {
+      orders: sum(rows, 'orders'),
+      totalCents: sum(rows, 'totalCents'),
+      discountCents: sum(rows, 'discountCents'),
+      taxCents: sum(rows, 'taxCents')
+    }
+  }
+}
+
+export function report(type: string, from?: string | null, to?: string | null, branchId?: number | null): ReportTable {
+  /* Set once here: a branch user's choice is overridden with their own branch,
+     so no screen and no direct call can reach another branch's figures. */
+  branchFilter = resolveBranchFilter(branchId)
+  try {
+    return runReport(type, from, to)
+  } finally {
+    branchFilter = null
+  }
+}
+
+function runReport(type: string, from?: string | null, to?: string | null): ReportTable {
   switch (type as ReportType) {
     case 'sales':
       return salesReport(from, to)
@@ -311,6 +361,10 @@ export function report(type: string, from?: string | null, to?: string | null): 
       return suppliersReport()
     case 'delivery':
       return deliveryReport(from, to)
+    case 'branches':
+      /* Comparing branches is a head-office question by definition. */
+      if (!isHeadOffice()) throw new AppError('FORBIDDEN')
+      return branchesReport(from, to)
     default:
       throw new AppError('VALIDATION', `Unknown report: ${type}`)
   }
@@ -357,9 +411,9 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:6px 8px;b
 <footer>AFUS Restaurant · ${esc(nowStamp())}</footer></body></html>`
 }
 
-export function exportReport(input: { type: string; from?: string | null; to?: string | null; format: string }): { filePath: string | null; html?: string } {
+export function exportReport(input: { type: string; from?: string | null; to?: string | null; format: string; branchId?: number | null }): { filePath: string | null; html?: string } {
   const r = range(input.from, input.to)
-  const table = report(input.type, r.from, r.to)
+  const table = report(input.type, r.from, r.to, input.branchId)
   const lang = getSettings().language
   const base = join(appPaths().reports, `${input.type}-${r.from}_${r.to}`)
   if (input.format === 'csv') {

@@ -128,6 +128,7 @@ export const CHANNELS = [
   'reports.purchases',
   'reports.suppliers',
   'reports.delivery',
+  'reports.branches',
   'reports.export',
   'insight.overview',
   'insight.ask',
