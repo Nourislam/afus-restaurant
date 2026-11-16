@@ -143,6 +143,7 @@ export const MESSAGES: Record<string, Message> = {
   'invoices.nextNumber': { ar: 'الرقم القادم', fr: 'Prochain numéro' },
   'invoices.buyer': { ar: 'الزبون', fr: 'Client' },
   'invoices.buyerName': { ar: 'الاسم أو الشركة', fr: 'Nom ou société' },
+  'invoices.vat': { ar: 'الرسم (TVA)', fr: 'TVA' },
   'invoices.buyerNif': { ar: 'الرقم الجبائي NIF', fr: 'NIF du client' },
   'invoices.buyerRc': { ar: 'السجل التجاري RC', fr: 'RC du client' },
   'invoices.empty': { ar: 'لا توجد فواتير بعد', fr: 'Aucune facture pour le moment' },

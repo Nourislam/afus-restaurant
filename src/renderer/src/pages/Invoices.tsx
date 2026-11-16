@@ -56,7 +56,7 @@ export default function InvoicesPage() {
       )
     },
     { key: 'date', header: t('common.date'), render: (row) => <span className="text-xs text-ink-500">{formatDate(row.issuedAt)}</span> },
-    { key: 'tax', header: t('fiscal.stamp'), align: 'end', render: (row) => <Money cents={row.taxCents} className="text-xs" /> },
+    { key: 'tax', header: t('invoices.vat'), align: 'end', render: (row) => <Money cents={row.taxCents} className="text-xs" /> },
     { key: 'total', header: t('common.total'), align: 'end', render: (row) => <Money cents={row.totalCents} className="font-semibold" /> },
     {
       key: 'print',
