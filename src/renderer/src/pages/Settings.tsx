@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { CalendarCheck, DatabaseBackup, Download, FileCheck2, FolderOpen, Printer, ReceiptText, RotateCcw, Save, ShieldCheck, Store, Trash2 } from 'lucide-react'
-import type { AppSettings, BackupFile, Branch, FiscalClosure, IntegrityReport, StampBracket } from '@shared/types'
+import { Archive, CalendarCheck, DatabaseBackup, Download, FileCheck2, FolderOpen, Lock, Printer, ReceiptText, RotateCcw, Save, ShieldCheck, Store, Trash2 } from 'lucide-react'
+import type { AppSettings, BackupFile, Branch, FiscalArchive, FiscalArchiveReport, FiscalClosure, IntegrityReport, StampBracket } from '@shared/types'
 import { PAYMENT_METHOD_LABELS } from '@shared/constants'
 import { api } from '../lib/api'
 import { useApi } from '../lib/hooks'
@@ -500,6 +500,8 @@ export default function Settings() {
             </Button>
           </div>
         </Card>
+
+        <ArchiveCard onError={setError} />
         </div>
       </div>
       ) : null}
@@ -592,5 +594,129 @@ export default function Settings() {
 
       <p className="text-[11px] text-ink-400">{t('setup.localOnly')}</p>
     </section>
+  )
+}
+
+/**
+ * Putting a finished year away. The passphrase never leaves this form, which is
+ * why the warning about losing it sits right under the field.
+ */
+function ArchiveCard({ onError }: { onError: (code: string | null) => void }) {
+  const { t } = useT()
+  const [archives, setArchives] = useState<FiscalArchive[]>([])
+  const [year, setYear] = useState(String(new Date().getFullYear() - 1))
+  const [passphrase, setPassphrase] = useState('')
+  const [busy, setBusy] = useState<string | null>(null)
+  const [report, setReport] = useState<FiscalArchiveReport | null>(null)
+  const [made, setMade] = useState<FiscalArchive | null>(null)
+
+  useEffect(() => {
+    api.fiscal.archives().then(setArchives).catch(() => setArchives([]))
+  }, [])
+
+  const run = async (key: string, action: () => Promise<void>) => {
+    setBusy(key)
+    onError(null)
+    try {
+      await action()
+      setArchives(await api.fiscal.archives())
+    } catch (caught) {
+      onError(caught instanceof Error ? caught.message : 'INTERNAL')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <Card className="space-y-4 p-5">
+      <div>
+        <h3 className="flex items-center gap-2 text-sm font-bold text-ink-800 dark:text-ink-100">
+          <Archive className="h-4 w-4 text-brand-700" aria-hidden />
+          {t('archive.title')}
+        </h3>
+        <p className="mt-1 text-xs text-ink-500">{t('archive.hint')}</p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label={t('archive.year')}>
+          <Input type="number" min="2000" max="2200" dir="ltr" value={year} onChange={(event) => setYear(event.target.value)} />
+        </Field>
+        <Field label={t('archive.passphrase')} hint={t('archive.passphraseHint')}>
+          <Input type="password" value={passphrase} onChange={(event) => setPassphrase(event.target.value)} dir="ltr" />
+        </Field>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Button
+          icon={Lock}
+          loading={busy === 'create'}
+          disabled={passphrase.length < 8}
+          onClick={() =>
+            void run('create', async () => {
+              setReport(null)
+              setMade(await api.fiscal.archive(Number(year), passphrase))
+            })
+          }
+        >
+          {t('archive.create')}
+        </Button>
+      </div>
+
+      {made ? (
+        <p className="rounded-lg border border-accent-200 bg-accent-50 px-3 py-2 text-xs text-accent-700 dark:border-accent-700/40 dark:bg-accent-500/10 dark:text-accent-300">
+          {t('archive.created')} · <span className="num" dir="ltr">{made.name}</span> · {made.counts.sales} {t('archive.sales')}
+        </p>
+      ) : null}
+
+      {report ? (
+        <div className="space-y-1 rounded-lg border border-ink-200 p-3 text-xs dark:border-ink-700">
+          <Badge tone={report.ok ? 'positive' : 'danger'}>
+            {report.ok ? t('archive.intact') : t(`archive.problem.${report.problem ?? 'cannotOpen'}`)}
+            {report.brokenAt ? ` #${report.brokenAt}` : ''}
+          </Badge>
+          <p className="num text-ink-500" dir="ltr">
+            {report.year} · {report.counts.sales} {t('archive.sales')} · {report.counts.auditRows} {t('fiscal.auditRows')}
+          </p>
+        </div>
+      ) : null}
+
+      {archives.length ? (
+        <ul className="divide-y divide-ink-100 text-xs dark:divide-ink-800">
+          {archives.map((archive) => (
+            <li key={archive.name} className="flex flex-wrap items-center justify-between gap-2 py-2">
+              <span className="min-w-0 flex-1">
+                <span className="num block truncate font-semibold text-ink-800 dark:text-ink-100" dir="ltr">
+                  {archive.year} · {archive.name}
+                </span>
+                <span className="num text-ink-500" dir="ltr">
+                  {archive.counts.sales} {t('archive.sales')} · {(archive.sizeBytes / 1024).toFixed(0)} KB
+                </span>
+              </span>
+              <span className="flex gap-1">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={ShieldCheck}
+                  loading={busy === archive.name}
+                  disabled={!passphrase}
+                  onClick={() => void run(archive.name, async () => setReport(await api.fiscal.verifyArchive(archive.name, passphrase)))}
+                >
+                  {t('archive.verify')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={Trash2}
+                  aria-label={t('common.delete')}
+                  onClick={() => void run('delete', async () => void (await api.fiscal.deleteArchive(archive.name)))}
+                />
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-xs text-ink-400">{t('archive.none')}</p>
+      )}
+    </Card>
   )
 }

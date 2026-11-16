@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { app } from 'electron'
 import { attestationHtml, closePeriod, computeStamp, fiscalExport, listClosures, verifyIntegrity } from '../../services/fiscal'
+import { archiveYear, deleteArchive, listArchives, verifyArchive } from '../../services/archive'
 import { registerMany } from '../registry'
 
 const dateKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -31,6 +32,31 @@ export const fiscalChannels = () =>
         permission: 'settings.manage',
         schema: z.object({ language: z.enum(['ar', 'fr']) }),
         handler: (input: { language: 'ar' | 'fr' }) => ({ html: attestationHtml(input.language, app.getVersion()) })
+      }
+    },
+    {
+      channel: 'fiscal.archive',
+      definition: {
+        permission: 'settings.manage',
+        schema: z.object({ year: z.number().int().min(2000).max(2200), passphrase: z.string().min(8).max(200) }),
+        handler: (input: { year: number; passphrase: string }) => archiveYear(input.year, input.passphrase)
+      }
+    },
+    { channel: 'fiscal.archives', definition: { permission: 'settings.manage', handler: () => listArchives() } },
+    {
+      channel: 'fiscal.verifyArchive',
+      definition: {
+        permission: 'settings.manage',
+        schema: z.object({ name: z.string().min(1).max(120), passphrase: z.string().min(1).max(200) }),
+        handler: (input: { name: string; passphrase: string }) => verifyArchive(input.name, input.passphrase)
+      }
+    },
+    {
+      channel: 'fiscal.deleteArchive',
+      definition: {
+        permission: 'settings.manage',
+        schema: z.object({ name: z.string().min(1).max(120) }),
+        handler: (input: { name: string }) => deleteArchive(input.name)
       }
     },
     {

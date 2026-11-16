@@ -26,6 +26,8 @@ import type {
   Branch,
   BranchHours,
   BranchOverride,
+  FiscalArchive,
+  FiscalArchiveReport,
   FiscalClosure,
   IntegrityReport,
   LoginProfile,
@@ -388,7 +390,11 @@ export const api = {
     closures: () => call<FiscalClosure[]>('fiscal.closures'),
     export: (from: string, to: string) => call<{ dir: string; files: string[]; count: number }>('fiscal.export', { from, to }),
     attestation: (language: 'ar' | 'fr') => call<{ html: string }>('fiscal.attestation', { language }),
-    previewStamp: (cashCents: number) => call<{ stampCents: number }>('fiscal.previewStamp', { cashCents })
+    previewStamp: (cashCents: number) => call<{ stampCents: number }>('fiscal.previewStamp', { cashCents }),
+    archive: (year: number, passphrase: string) => call<FiscalArchive>('fiscal.archive', { year, passphrase }),
+    archives: () => call<FiscalArchive[]>('fiscal.archives'),
+    verifyArchive: (name: string, passphrase: string) => call<FiscalArchiveReport>('fiscal.verifyArchive', { name, passphrase }),
+    deleteArchive: (name: string) => call<{ deleted: boolean }>('fiscal.deleteArchive', { name })
   },
 
   branches: {

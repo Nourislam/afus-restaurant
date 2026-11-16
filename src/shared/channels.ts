@@ -160,7 +160,11 @@ export const CHANNELS = [
   'fiscal.closures',
   'fiscal.export',
   'fiscal.attestation',
-  'fiscal.previewStamp'
+  'fiscal.previewStamp',
+  'fiscal.archive',
+  'fiscal.archives',
+  'fiscal.verifyArchive',
+  'fiscal.deleteArchive'
 ] as const
 
 export type Channel = (typeof CHANNELS)[number]

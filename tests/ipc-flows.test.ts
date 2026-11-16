@@ -196,6 +196,7 @@ describe('every screen can load the data it opens with', () => {
     ['insight.overview', {}],
     ['fiscal.verify', {}],
     ['fiscal.closures', {}],
+    ['fiscal.archives', {}],
     ['backup.list', {}],
     ['branches.list', {}],
     ['website.state', {}],
@@ -486,6 +487,28 @@ it('establishes a formal invoice for a company and reprints it', async () => {
     expect(doc.html).toContain('000216001234567')
     expect(doc.html).toContain('Arrêtée la présente facture')
     expect((await call('invoices.list', {})).length).toBe(1)
+  })
+
+it('seals a year into one encrypted file and opens it again', async () => {
+    const product = firstProduct()
+    const order = await call('orders.create', { type: 'takeaway', items: [{ productId: product.id, qty: 1 }] })
+    await call('orders.pay', { orderId: order.id, payments: [{ method: 'cash', amountCents: order.totalCents }] })
+    const year = new Date().getFullYear()
+
+    expect(await failure('fiscal.archive', { year, passphrase: 'court' })).toBe('VALIDATION')
+    const archive = await call('fiscal.archive', { year, passphrase: 'un-mot-de-passe-solide' })
+    expect(archive.counts.sales).toBe(1)
+    /* The head identifies it without any key. */
+    expect(archive.year).toBe(year)
+
+    const good = await call('fiscal.verifyArchive', { name: archive.name, passphrase: 'un-mot-de-passe-solide' })
+    expect(good.ok).toBe(true)
+    const bad = await call('fiscal.verifyArchive', { name: archive.name, passphrase: 'mauvais-mot-de-passe' })
+    expect(bad.ok).toBe(false)
+    expect(bad.problem).toBe('cannotOpen')
+
+    expect((await call('fiscal.archives', {})).length).toBeGreaterThan(0)
+    expect((await call('fiscal.deleteArchive', { name: archive.name })).deleted).toBe(true)
   })
 
   it('takes a backup and lists it', async () => {

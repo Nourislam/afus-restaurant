@@ -67,6 +67,28 @@ export interface FiscalClosure {
   createdAt: string
 }
 
+/** A year sealed into one file: the head is readable, the year itself is not. */
+export interface FiscalArchive {
+  name: string
+  path: string
+  sizeBytes: number
+  year: number
+  createdAt: string
+  restaurant: { name: string; legalName: string; nif: string; nis: string; rc: string; ai: string }
+  counts: { sales: number; auditRows: number; closures: number }
+  payloadSha256: string
+}
+
+export interface FiscalArchiveReport {
+  ok: boolean
+  year: number
+  createdAt: string
+  counts: { sales: number; auditRows: number; closures: number }
+  checks: { sealIntact: boolean; payloadHashMatches: boolean; countsMatch: boolean; salesChainIntact: boolean }
+  brokenAt: number | null
+  problem: string | null
+}
+
 export interface IntegrityReport {
   ok: boolean
   checkedAt: string
