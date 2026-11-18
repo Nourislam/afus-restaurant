@@ -46,8 +46,18 @@ export const ordersChannels = () =>
       channel: 'orders.list',
       definition: {
         permission: 'orders.view',
-        schema: z.object({ status: z.string().max(24).nullish(), limit: z.number().int().positive().max(500).optional() }).default({}),
-        handler: (input: { status?: string | null; limit?: number }) => listOrders(input)
+        schema: z
+          .object({
+            status: z.string().max(24).nullish(),
+            type: z.string().max(24).nullish(),
+            from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
+            to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(),
+            search: z.string().max(80).nullish(),
+            held: z.boolean().optional(),
+            limit: z.number().int().positive().max(500).optional()
+          })
+          .default({}),
+        handler: (input: Parameters<typeof listOrders>[0]) => listOrders(input)
       }
     },
     {

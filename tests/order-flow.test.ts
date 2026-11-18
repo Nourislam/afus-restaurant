@@ -9,13 +9,16 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { closeDatabase, dbAll, dbGet, openDatabase } from '../src/main/db/client'
 import { seedCoreData } from '../src/main/db/seed'
 import { completeSetup } from '../src/main/services/setup'
-import { updateSettings } from '../src/main/services/settings'
+import { DEFAULT_SETTINGS, updateSettings } from '../src/main/services/settings'
+import { stampCentsFor } from '../src/shared/stamp'
 import {
   addItem,
   cancelOrder,
   completeOrder,
   createOrder,
   flowFor,
+  holdOrder,
+  listOrders,
   payOrder,
   sendToKitchen,
   setStatus
@@ -282,5 +285,83 @@ describe('when the house has not decided', () => {
       closeNow: true
     })
     expect(paid.status).toBe('completed')
+  })
+})
+
+describe('stamp duty on a cash sale', () => {
+  it('is collected with the bill, not left behind as a balance', () => {
+    /* The till used to charge the dishes only, so every cash sale ended one
+       stamp short and the order stayed open. The bill the cashier presents has
+       to include the stamp. */
+    updateSettings({ stampEnabled: true, orderFlow: { dineIn: 'payLast' } })
+    const order = dineIn()
+    const stamp = stampCentsFor(order.totalCents, {
+      stampEnabled: true,
+      stampBrackets: DEFAULT_SETTINGS.stampBrackets,
+      stampMinCents: DEFAULT_SETTINGS.stampMinCents,
+      stampMaxCents: DEFAULT_SETTINGS.stampMaxCents
+    })
+    expect(stamp).toBeGreaterThan(0)
+    const paid = payOrder({
+      orderId: order.id,
+      payments: [{ method: 'cash', amountCents: order.totalCents + stamp }]
+    })
+    expect(paid.stampCents).toBe(stamp)
+    expect(paid.dueCents).toBe(0)
+    expect(paid.status).toBe('completed')
+  })
+
+  it('is not charged on a card payment', () => {
+    updateSettings({ stampEnabled: true, orderFlow: { dineIn: 'payLast' } })
+    const order = dineIn()
+    const paid = payOrder({ orderId: order.id, payments: [{ method: 'card', amountCents: order.totalCents }] })
+    expect(paid.stampCents).toBe(0)
+    expect(paid.status).toBe('completed')
+  })
+})
+
+describe('the till’s parked orders', () => {
+  it('lists the parked ones, not every order in the restaurant', () => {
+    /* The flag was dropped on the way in, so the list came back holding the
+       whole day's trade and "resume" offered orders that were never parked. */
+    table()
+    const parked = dineIn()
+    holdOrder(parked.id)
+    const busy = dineIn()
+    sendToKitchen(busy.id)
+
+    const held = listOrders({ held: true })
+    expect(held.map((order) => order.id)).toEqual([parked.id])
+    expect(listOrders({}).length).toBeGreaterThan(1)
+  })
+})
+
+describe('finding an order', () => {
+  /* The orders screen asks the main process to filter; it used to throw the
+     whole filter away, so choosing a status or typing a name changed nothing. */
+  it('filters by status, type, day and search term', () => {
+    table()
+    const seated = dineIn()
+    sendToKitchen(seated.id)
+    const parcel = createOrder({ type: 'takeaway', items: [{ productId: TEA().id, qty: 1 }] })
+
+    expect(listOrders({ type: 'takeaway' }).map((o) => o.id)).toEqual([parcel.id])
+    expect(listOrders({ type: 'dineIn' }).map((o) => o.id)).toEqual([seated.id])
+    expect(listOrders({ status: 'sent' }).map((o) => o.id)).toEqual([seated.id])
+    expect(listOrders({ search: parcel.orderNumber }).map((o) => o.id)).toEqual([parcel.id])
+    expect(listOrders({ search: 'لا يوجد' })).toEqual([])
+
+    const today = new Date().toISOString().slice(0, 10)
+    expect(listOrders({ from: today, to: today }).length).toBe(2)
+    expect(listOrders({ from: '2000-01-01', to: '2000-01-02' })).toEqual([])
+  })
+
+  it('finds a delivery by the customer’s phone', () => {
+    const ride = createOrder({
+      type: 'delivery',
+      items: [{ productId: TEA().id, qty: 1 }],
+      delivery: { customerName: 'محمد', phone: '0661 23 45 67', address: 'حي النصر' }
+    })
+    expect(listOrders({ search: '0661' }).map((o) => o.id)).toEqual([ride.id])
   })
 })

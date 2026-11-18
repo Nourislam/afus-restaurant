@@ -7,6 +7,7 @@ import { api } from '../lib/api'
 import { useApi } from '../lib/hooks'
 import { errorText, useT } from '../i18n'
 import { centsToInput, formatDateTime, formatMoney, toCents } from '../lib/format'
+import { stampCentsFor } from '@shared/stamp'
 import {
   deliveryStatusLabel,
   deliveryStatusTone,
@@ -426,17 +427,28 @@ function QuickPayModal({
   onPaid: (order: Order) => void
 }) {
   const { t, language } = useT()
+  const settings = useAppStore((state) => state.settings)
   const [method, setMethod] = useState(methods[0] ?? 'cash')
+  /* The dishes, plus the stamp a cash payment owes on them: collecting only the
+     dishes would leave the stamp due and the order open. */
+  const saleCents = Math.max(0, order.totalCents - order.stampCents)
+  const stampCents = method === 'cash' && settings ? stampCentsFor(saleCents, settings) : 0
+  const payableCents = Math.max(0, saleCents + stampCents - order.paidCents)
   const [amount, setAmount] = useState(centsToInput(order.dueCents))
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const cents = toCents(amount) ?? 0
 
+  /* Changing the method changes what is owed, so the figure follows it. */
+  useEffect(() => {
+    setAmount(centsToInput(payableCents))
+  }, [payableCents])
+
   return (
     <Modal
       open
       title={t('pos.pay')}
-      subtitle={`${order.orderNumber} · ${t('common.due')}: ${formatMoney(order.dueCents, currency, 0)}`}
+      subtitle={`${order.orderNumber} · ${t('common.due')}: ${formatMoney(payableCents, currency, 0)}${stampCents > 0 ? ` · ${t('fiscal.stamp')}: ${formatMoney(stampCents, currency, 0)}` : ''}`}
       onClose={onClose}
       size="sm"
       footer={

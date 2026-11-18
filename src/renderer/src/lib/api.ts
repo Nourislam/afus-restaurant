@@ -195,7 +195,9 @@ export const api = {
   },
 
   orders: {
-    list: (_input: ListInput = {}) => call<OrderSummary[]>('orders.list'),
+    /* The whole filter goes to the main process: the screens ask for a status,
+       a type, a date range or a search term and expect to be given those. */
+    list: (input: ListInput = {}) => call<OrderSummary[]>('orders.list', input),
     get: (id: number) => call<Order>('orders.get', { id }),
     create: (input: Record<string, unknown>) => call<Order>('orders.create', input),
     addItem: (orderId: number, input: Record<string, unknown>) => call<Order>('orders.addItem', { orderId, ...input }),

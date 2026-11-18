@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>Afus Restaurant — تجربة</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%236366f1'/><text x='16' y='23' font-family='Arial' font-size='15' font-weight='bold' fill='white' text-anchor='middle'>AF</text></svg>" />
+    <style>
+      html, body { margin: 0; height: 100%; background: #0b0b0d; }
+      #demo-loading { position: fixed; inset: 0; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: #0b0b0d; color: #f4f4f5; font-family: system-ui, sans-serif; }
+      #demo-loading .t { font-size: 22px; font-weight: 700; letter-spacing: .01em; }
+      #demo-loading .s { opacity: .65; font-size: 14px; text-align: center; padding: 0 24px; line-height: 1.7; }
+      #demo-loading .bar { width: min(320px, 70vw); height: 6px; background: #26262b; border-radius: 99px; overflow: hidden; }
+      #demo-loading-bar { height: 100%; width: 4%; background: #6366f1; transition: width .3s ease-out; }
+    </style>
+  </head>
+  <body>
+    <div id="demo-loading">
+      <div class="t">Afus Restaurant</div>
+      <div class="s">نحضّر مطعمًا تجريبيًا… Préparation du restaurant de démo…</div>
+      <div class="bar"><div id="demo-loading-bar"></div></div>
+    </div>
+    <div id="root"></div>
+    <script type="module" src="./boot.js"></script>
+  </body>
+</html>

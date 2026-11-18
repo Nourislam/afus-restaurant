@@ -721,9 +721,24 @@ export function getOrder(id: number): Order {
   return buildOrder(id)
 }
 
-export function listOrders(input: { status?: string | null; limit?: number; branchId?: number | null } = {}): OrderSummary[] {
+export interface ListOrdersInput {
+  status?: string | null
+  type?: string | null
+  /** Day strings, YYYY-MM-DD, against the day the order was opened. */
+  from?: string | null
+  to?: string | null
+  /** Matches the order number, the customer or the table. */
+  search?: string | null
+  held?: boolean
+  limit?: number
+  branchId?: number | null
+}
+
+export function listOrders(input: ListOrdersInput = {}): OrderSummary[] {
   const clauses: string[] = []
   const params: (string | number)[] = []
+  /* The till's "parked orders" list asks for exactly these. */
+  if (input.held) clauses.push('o.isHeld = 1')
   /* A branch only ever sees its own orders, whatever it asks for. */
   const branch = resolveBranchFilter(input.branchId)
   if (branch !== null) {
@@ -737,6 +752,26 @@ export function listOrders(input: { status?: string | null; limit?: number; bran
     clauses.push('o.status = ?')
     params.push(input.status)
   }
+  if (input.type) {
+    clauses.push('o.type = ?')
+    params.push(input.type)
+  }
+  if (input.from) {
+    clauses.push('o.createdAt >= ?')
+    params.push(`${input.from} 00:00:00`)
+  }
+  if (input.to) {
+    clauses.push('o.createdAt <= ?')
+    params.push(`${input.to} 23:59:59`)
+  }
+  /* What someone types into the box on the orders screen: a ticket number, a
+     customer's name, or a table. */
+  const term = input.search?.trim()
+  if (term) {
+    clauses.push('(o.orderNumber LIKE ? OR c.name LIKE ? OR t.name LIKE ? OR d.customerName LIKE ? OR d.phone LIKE ?)')
+    const like = `%${term}%`
+    params.push(like, like, like, like, like)
+  }
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
   params.push(Math.min(500, input.limit ?? 200))
   return dbAll<OrderSummary>(
@@ -748,6 +783,7 @@ export function listOrders(input: { status?: string | null; limit?: number; bran
        LEFT JOIN dining_tables t ON t.id = o.tableId
        LEFT JOIN customers c ON c.id = o.customerId
        LEFT JOIN users u ON u.id = o.userId
+       LEFT JOIN delivery_info d ON d.orderId = o.id
        ${where}
       ORDER BY o.id DESC LIMIT ?`,
     params

@@ -53,13 +53,26 @@ npm run test         # vitest
 npm run build        # typecheck + production build
 npm run dist:mac     # package a macOS build
 npm run dist:win     # package a Windows build
+npm run build:demo   # the web demo -> dist-demo/ (see below)
 ```
 
-## Website
+## Website and the web demo
 
 The marketing page for Afus Restaurant lives in the Afus company website, alongside the other
 programs: [`afus-boutique/site`](../afus-boutique/site) (the `restaurant` page, built to
 `/restaurant` and `/fr/restaurant`). Run `npm run build:site` in `afus-boutique` to regenerate it.
+
+That page offers the program to try, and the trial is this program: `demo-web/` builds the real
+main process, the real bridge and the real screens into one browser page, with Electron and Node
+played by small shims and SQLite compiled to WebAssembly. It opens on a demo restaurant in the
+middle of a service — tables occupied, tickets on the kitchen board, weeks of sealed sales —
+built by the program's own services in [`src/main/services/demo.ts`](src/main/services/demo.ts).
+Nothing leaves the page and nothing is kept: a reload gives the same restaurant, new.
+
+```bash
+npm run build:demo                       # here  -> dist-demo/
+cd ../afus-boutique && npm run build:site  # copies it to dist-site/demo-restaurant/
+```
 
 ## License
 

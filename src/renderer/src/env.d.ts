@@ -18,6 +18,16 @@ declare global {
       invoke: <T = unknown>(channel: string, payload?: unknown) => Promise<IpcResult<T>>
       onEvent: (handler: (event: AppEvent) => void) => () => void
     }
+    /** Set only by the web demo on the Afus website, where the whole program
+     *  runs in a browser tab. Absent in the installed program. */
+    __AFUS_WEB_DEMO__?: {
+      /** Back to the restaurant's page on the website. */
+      siteUrl?: string
+      /** Straight to "order the program" on that page. */
+      orderUrl?: string
+      /** Reopen the guided tour. */
+      tour?: () => void
+    }
   }
 
   /** Chromium's Window Controls Overlay, present when the window draws its own

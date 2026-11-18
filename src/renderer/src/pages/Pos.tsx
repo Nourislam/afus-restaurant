@@ -42,6 +42,7 @@ import {
   Textarea
 } from '../components/ui'
 import { kitchenTicketHtml, receiptHtml } from '@shared/receipts'
+import { stampCentsFor } from '@shared/stamp'
 import type { Offer, OfferOffer } from '@shared/types'
 
 interface DraftLine {
@@ -1362,15 +1363,28 @@ function PaymentModal({
   onPaid: (order: Order, printReceipt: boolean) => void
 }) {
   const { t, language } = useT()
+  const settings = useAppStore((state) => state.settings)
+  /* What the dishes come to, before any stamp already charged. */
+  const saleCents = Math.max(0, order.totalCents - order.stampCents)
+  const firstMethod = methods[0] ?? 'cash'
+  /* The stamp is owed on the cash part of the sale, so the cashier has to see
+     it on the bill — collecting only the dishes leaves the stamp unpaid and the
+     order open, which is the bug this replaces. */
+  const stampOn = (cashCents: number): number =>
+    settings ? stampCentsFor(Math.min(cashCents, saleCents), settings) : 0
   const [rows, setRows] = useState<{ method: string; amount: string }[]>([
-    { method: methods[0] ?? 'cash', amount: centsToInput(order.dueCents) }
+    { method: firstMethod, amount: centsToInput(Math.max(0, saleCents + (firstMethod === 'cash' ? stampOn(saleCents) : 0) - order.paidCents)) }
   ])
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [printReceipt, setPrintReceipt] = useState(true)
 
   const total = rows.reduce((sum, row) => sum + (toCents(row.amount) ?? 0), 0)
-  const remaining = order.dueCents - total
+  const cashCents = rows.reduce((sum, row) => sum + (row.method === 'cash' ? toCents(row.amount) ?? 0 : 0), 0)
+  const stampCents = stampOn(cashCents)
+  /* Everything still to collect: the dishes, plus the stamp this payment owes. */
+  const payableCents = Math.max(0, saleCents + stampCents - order.paidCents)
+  const remaining = payableCents - total
 
   const submit = async () => {
     setError(null)
@@ -1378,7 +1392,7 @@ function PaymentModal({
       setError(t('errors.INVALID_PAYMENT_AMOUNT'))
       return
     }
-    if (total > order.dueCents) {
+    if (total > payableCents) {
       setError(t('errors.OVERPAYMENT'))
       return
     }
@@ -1400,7 +1414,7 @@ function PaymentModal({
     <Modal
       open
       title={t('pos.pay')}
-      subtitle={`${order.orderNumber} · ${t('common.due')}: ${formatMoney(order.dueCents, currency, 0)}`}
+      subtitle={`${order.orderNumber} · ${t('common.due')}: ${formatMoney(payableCents, currency, 0)}`}
       onClose={onClose}
       footer={
         <>
@@ -1455,14 +1469,14 @@ function PaymentModal({
             onClick={() =>
               setRows([
                 ...rows,
-                { method: methods[0] ?? 'cash', amount: centsToInput(Math.max(0, order.dueCents - total)) }
+                { method: methods[0] ?? 'cash', amount: centsToInput(Math.max(0, payableCents - total)) }
               ])
             }
           >
             + {t('pos.split')}
           </Button>
           {rows.length > 1 ? (
-            <Button variant="ghost" size="sm" onClick={() => setRows([{ method: methods[0] ?? 'cash', amount: centsToInput(order.dueCents) }])}>
+            <Button variant="ghost" size="sm" onClick={() => setRows([{ method: firstMethod, amount: centsToInput(payableCents) }])}>
               {t('common.clear')}
             </Button>
           ) : null}
@@ -1471,8 +1485,14 @@ function PaymentModal({
         <div className="space-y-1 rounded-lg bg-slate-50 px-3 py-2 text-xs dark:bg-slate-800/60">
           <div className="flex justify-between">
             <span className="text-slate-500">{t('common.total')}</span>
-            <Money cents={order.totalCents} />
+            <Money cents={saleCents} />
           </div>
+          {stampCents > 0 ? (
+            <div className="flex justify-between">
+              <span className="text-slate-500">{t('fiscal.stamp')}</span>
+              <Money cents={stampCents} />
+            </div>
+          ) : null}
           <div className="flex justify-between">
             <span className="text-slate-500">{t('pos.remaining')}</span>
             <Money cents={Math.max(0, remaining)} className={remaining < 0 ? 'text-red-600' : 'font-semibold'} />

@@ -18,21 +18,15 @@ import { AppError } from '../utils/errors'
 import { appPaths } from '../paths'
 import { getSettings } from './settings'
 import { auditHash, sha256, writeAudit } from './audit'
+import { stampCentsFor } from '@shared/stamp'
 
 /* ---------------- Stamp duty ---------------- */
 
-/** Stamp (cents) owed on a cash amount, per the configured brackets; 0 when disabled. */
+/** Stamp (cents) owed on a cash amount, per the configured brackets; 0 when disabled.
+ *  The arithmetic is shared with the till, which has to show the stamp on the
+ *  bill before the cashier takes the money. */
 export function computeStamp(cashCents: number): number {
-  const s = getSettings()
-  if (!s.stampEnabled || cashCents <= 0) return 0
-  const brackets = [...s.stampBrackets].sort((a, b) => (a.uptoCents ?? Infinity) - (b.uptoCents ?? Infinity))
-  const bracket = brackets.find((b) => b.uptoCents === null || cashCents <= b.uptoCents) ?? brackets[brackets.length - 1]
-  if (!bracket) return 0
-  const hundreds = Math.ceil(cashCents / 10_000) // whole (started) 100 DA units
-  let stamp = Math.round(hundreds * bracket.ratePerHundred * 100)
-  stamp = Math.max(stamp, s.stampMinCents)
-  if (s.stampMaxCents > 0) stamp = Math.min(stamp, s.stampMaxCents)
-  return stamp
+  return stampCentsFor(cashCents, getSettings())
 }
 
 /* ---------------- Sealed sales ---------------- */
