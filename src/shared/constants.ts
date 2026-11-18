@@ -63,6 +63,23 @@ export const ORDER_TYPES = [
   { value: 'preorder', label: { ar: 'طلب مسبق', fr: 'Précommande' } }
 ] as const
 
+/**
+ * Which comes first, the money or the kitchen. Both are ordinary practice:
+ *  - payLast   the kitchen cooks, the guest eats, the bill is settled at the end
+ *              (table service),
+ *  - payFirst  the guest pays at the counter and only then is the order fired
+ *              (fast food, takeaway, a pre-order),
+ *  - flexible  no rule — the cashier does whichever the moment calls for.
+ * It is set per order type, because one restaurant commonly does both.
+ */
+export const ORDER_FLOWS = [
+  { value: 'payLast', label: { ar: 'الدفع بعد التقديم', fr: 'Paiement après service' } },
+  { value: 'payFirst', label: { ar: 'الدفع قبل التحضير', fr: 'Paiement avant préparation' } },
+  { value: 'flexible', label: { ar: 'حسب الحالة', fr: 'Au choix' } }
+] as const
+
+export type OrderFlow = (typeof ORDER_FLOWS)[number]['value']
+
 export const ORDER_STATUSES = [
   { value: 'new', label: { ar: 'جديد', fr: 'Nouveau' } },
   { value: 'preparing', label: { ar: 'قيد التحضير', fr: 'En préparation' } },

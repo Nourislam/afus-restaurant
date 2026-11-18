@@ -45,24 +45,36 @@ interface SealRow {
   taxCents: number
   stampCents: number
   totalCents: number
+  paidAt: string | null
   completedAt: string | null
   fiscalSeq: number | null
   fiscalHash: string | null
   fiscalPrevHash: string | null
 }
 
-const SEAL_SELECT = 'SELECT id, orderNumber, subtotalCents, discountCents, taxCents, stampCents, totalCents, completedAt, fiscalSeq, fiscalHash, fiscalPrevHash FROM orders'
+const SEAL_SELECT = 'SELECT id, orderNumber, subtotalCents, discountCents, taxCents, stampCents, totalCents, paidAt, completedAt, fiscalSeq, fiscalHash, fiscalPrevHash FROM orders'
 
-export function saleHash(prevHash: string, seq: number, r: SealRow): string {
-  return sha256([prevHash, seq, r.orderNumber, r.subtotalCents, r.discountCents, r.taxCents, r.stampCents, r.totalCents, r.completedAt ?? ''].join('|'))
+/**
+ * The moment the sale became final for the tax authority: when the money was
+ * all in. In a prepaid order that is before the food is handed over, so the
+ * seal must not depend on `completedAt` — that column is still null at the time
+ * and would change afterwards, breaking the chain. Sales sealed before this
+ * existed have `paidAt` backfilled to `completedAt`, so their hash is unchanged.
+ */
+function fiscalMoment(r: SealRow): string {
+  return r.paidAt ?? r.completedAt ?? ''
 }
 
-/** Assign the next fiscal number and chain hash to a completed order (idempotent). */
+export function saleHash(prevHash: string, seq: number, r: SealRow): string {
+  return sha256([prevHash, seq, r.orderNumber, r.subtotalCents, r.discountCents, r.taxCents, r.stampCents, r.totalCents, fiscalMoment(r)].join('|'))
+}
+
+/** Assign the next fiscal number and chain hash to a settled sale (idempotent). */
 export function sealOrder(orderId: number): { fiscalSeq: number; fiscalHash: string } {
   const row = dbGet<SealRow>(`${SEAL_SELECT} WHERE id = ?`, [orderId])
   if (!row) throw new AppError('NOT_FOUND', 'Order not found')
   if (row.fiscalSeq !== null && row.fiscalHash) return { fiscalSeq: row.fiscalSeq, fiscalHash: row.fiscalHash }
-  if (!row.completedAt) throw new AppError('CONFLICT', 'Only completed sales are sealed')
+  if (!fiscalMoment(row)) throw new AppError('CONFLICT', 'Only a settled sale is sealed')
   const prev = dbGet<{ fiscalSeq: number; fiscalHash: string }>(
     'SELECT fiscalSeq, fiscalHash FROM orders WHERE fiscalSeq IS NOT NULL ORDER BY fiscalSeq DESC LIMIT 1'
   )
@@ -141,7 +153,11 @@ function mapClosure(r: Record<string, unknown>): FiscalClosure {
 export function closePeriod(kind: 'day' | 'year', key: string): FiscalClosure {
   const { fromAt, toAt } = periodRange(kind, key)
   const sales = dbAll<SealRow>(
-    `${SEAL_SELECT} WHERE status = 'completed' AND fiscalSeq IS NOT NULL AND completedAt BETWEEN ? AND ? ORDER BY fiscalSeq ASC`,
+    /* A sealed sale counts on the day its money came in. Requiring 'completed'
+       would drop a prepaid order still waiting at the counter, and dating it by
+       `completedAt` would push it into tomorrow if it is handed over after
+       midnight — while the cash is in tonight's drawer. */
+    `${SEAL_SELECT} WHERE status != 'cancelled' AND fiscalSeq IS NOT NULL AND COALESCE(paidAt, completedAt) BETWEEN ? AND ? ORDER BY fiscalSeq ASC`,
     [fromAt, toAt]
   )
   const sum = (f: (r: SealRow) => number) => sales.reduce((acc, r) => acc + f(r), 0)
@@ -172,8 +188,9 @@ export function fiscalExport(from: string, to: string): { dir: string; files: st
   if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) throw new AppError('VALIDATION', 'Dates must be YYYY-MM-DD')
   const s = getSettings()
   const sales = dbAll<SealRow & { type: string; paidCents: number }>(
-    `SELECT id, orderNumber, type, subtotalCents, discountCents, taxCents, stampCents, totalCents, paidCents, completedAt, fiscalSeq, fiscalHash, fiscalPrevHash
-       FROM orders WHERE status = 'completed' AND fiscalSeq IS NOT NULL AND completedAt BETWEEN ? AND ? ORDER BY fiscalSeq ASC`,
+    `SELECT id, orderNumber, type, subtotalCents, discountCents, taxCents, stampCents, totalCents, paidCents,
+            COALESCE(paidAt, completedAt) AS soldAt, paidAt, completedAt, fiscalSeq, fiscalHash, fiscalPrevHash
+       FROM orders WHERE status != 'cancelled' AND fiscalSeq IS NOT NULL AND COALESCE(paidAt, completedAt) BETWEEN ? AND ? ORDER BY fiscalSeq ASC`,
     [`${from} 00:00:00`, `${to} 23:59:59`]
   )
   const closures = dbAll<Record<string, unknown>>('SELECT * FROM fiscal_closures WHERE fromAt >= ? AND toAt <= ? ORDER BY id', [`${from} 00:00:00`, `${to} 23:59:59`])
@@ -196,7 +213,7 @@ export function fiscalExport(from: string, to: string): { dir: string; files: st
   }
   writeFileSync(join(dir, `${base}.json`), JSON.stringify(json, null, 2))
   const csvEsc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
-  const header = ['fiscalSeq', 'orderNumber', 'type', 'completedAt', 'subtotalCents', 'discountCents', 'taxCents', 'stampCents', 'totalCents', 'paidCents', 'fiscalHash', 'fiscalPrevHash']
+  const header = ['fiscalSeq', 'orderNumber', 'type', 'soldAt', 'completedAt', 'subtotalCents', 'discountCents', 'taxCents', 'stampCents', 'totalCents', 'paidCents', 'fiscalHash', 'fiscalPrevHash']
   const csv = [header.join(','), ...sales.map((r) => header.map((h) => csvEsc((r as unknown as Record<string, unknown>)[h])).join(','))].join('\n')
   writeFileSync(join(dir, `${base}.csv`), '﻿' + csv)
   writeAudit('fiscal.export', 'export', base, { count: sales.length })

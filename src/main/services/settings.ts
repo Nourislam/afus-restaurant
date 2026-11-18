@@ -49,7 +49,18 @@ export const DEFAULT_SETTINGS: AppSettings = {
   backupKeep: 30,
   paymentMethods: ['cash', 'card'],
   kitchenAlertMinutes: 12,
-  preorderLeadMinutes: 30
+  preorderLeadMinutes: 30,
+  /* Settling at the end is what a restaurant does unless it decides otherwise,
+     so that is the default for every type — a shop that upgrades keeps working
+     exactly as it did. A counter that wants the money first switches takeaway
+     (and usually pre-orders) to 'payFirst' in the settings. */
+  orderFlow: {
+    dineIn: 'payLast',
+    takeaway: 'payLast',
+    delivery: 'payLast',
+    preorder: 'payLast'
+  },
+  autoSendOnPrepay: true
 }
 
 const settingsPatchSchema = z
@@ -96,7 +107,11 @@ const settingsPatchSchema = z
     loyaltyEnabled: z.boolean(),
     paymentMethods: z.array(z.string().min(1).max(24)).min(1),
     kitchenAlertMinutes: z.number().int().min(1).max(240),
-    preorderLeadMinutes: z.number().int().min(0).max(10080)
+    preorderLeadMinutes: z.number().int().min(0).max(10080),
+    /* Partial on purpose: a screen may send one type's choice, and a type the
+       owner never set falls back to settling at the end. */
+    orderFlow: z.partialRecord(z.enum(['dineIn', 'takeaway', 'delivery', 'preorder']), z.enum(['payLast', 'payFirst', 'flexible'])),
+    autoSendOnPrepay: z.boolean()
   })
   .partial()
 
@@ -120,9 +135,13 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
   const parsed = settingsPatchSchema.parse(patch)
   const entries = Object.entries(parsed).filter(([, value]) => value !== undefined)
   if (entries.length === 0) throw new AppError('VALIDATION', 'No settings supplied')
+  const current = getSettings()
   transaction(() => {
     for (const [key, value] of entries) {
-      dbWrite('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, JSON.stringify(value)])
+      /* The order flows are four independent choices in one setting. A screen
+         that sends only the one it changed must not silently reset the rest. */
+      const stored = key === 'orderFlow' ? { ...current.orderFlow, ...(value as Record<string, string>) } : value
+      dbWrite('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, JSON.stringify(stored)])
     }
   })
   return getSettings()

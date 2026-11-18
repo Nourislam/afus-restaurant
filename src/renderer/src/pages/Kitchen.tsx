@@ -161,7 +161,20 @@ export default function KitchenPage() {
                     <Card className={`overflow-hidden transition-shadow duration-200 ${late ? 'animate-attention ring-1 ring-red-400 shadow-glow' : ''}`}>
                       <div className={`flex items-start justify-between gap-2 px-3 py-2 ${late ? 'bg-red-50 dark:bg-red-950/30' : 'bg-slate-50 dark:bg-slate-800/50'}`}>
                         <div>
-                          <p className="text-sm font-bold text-slate-900 dark:text-white">{ticket.orderNumber}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-bold text-slate-900 dark:text-white">{ticket.orderNumber}</p>
+                            {/* Whether the food is already paid for decides whether it
+                                can simply be handed out when it is ready. */}
+                            <span
+                              className={
+                                ticket.prepaid
+                                  ? 'rounded px-1.5 py-px text-[9px] font-bold text-accent-700 ring-1 ring-accent-200 dark:text-accent-300 dark:ring-accent-500/30'
+                                  : 'rounded px-1.5 py-px text-[9px] font-bold text-amber-700 ring-1 ring-amber-200 dark:text-amber-300 dark:ring-amber-500/30'
+                              }
+                            >
+                              {ticket.prepaid ? t('kitchen.prepaid') : t('kitchen.unpaid')}
+                            </span>
+                          </div>
                           <p className="text-[10px] text-slate-500">
                             {ticket.tableName ?? orderTypeLabel(language, ticket.type)}
                             {ticket.waiterName ? ` · ${ticket.waiterName}` : ''}

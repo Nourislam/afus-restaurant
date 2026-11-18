@@ -5,11 +5,12 @@ import { dbAll, dbGet } from '../db/client'
 import { addDays, nowStamp, today } from '../utils/dates'
 import { expensesReport, inventoryReport, productsReport, salesReport, wasteReport } from './reports'
 import { baseValueCents, fromBase, unitFactor } from './units'
+import { settledSale } from './sale'
 
 const ts = (day: string, end = false) => `${day} ${end ? '23:59:59' : '00:00:00'}`
 
 function salesBetween(from: string, to: string): number {
-  return dbGet<{ total: number | null }>("SELECT SUM(totalCents) AS total FROM orders WHERE status = 'completed' AND createdAt BETWEEN ? AND ?", [ts(from), ts(to, true)])?.total ?? 0
+  return dbGet<{ total: number | null }>(`SELECT SUM(totalCents) AS total FROM orders WHERE ${settledSale('')} AND createdAt BETWEEN ? AND ?`, [ts(from), ts(to, true)])?.total ?? 0
 }
 
 export function insightOverview(rangeDays = 30): InsightOverview {
@@ -59,7 +60,7 @@ export function insightOverview(rangeDays = 30): InsightOverview {
   }
 
   const peakHours = dbAll<{ hour: string; orders: number }>(
-    "SELECT substr(createdAt, 12, 2) || ':00' AS hour, COUNT(*) AS orders FROM orders WHERE status = 'completed' AND createdAt BETWEEN ? AND ? GROUP BY hour ORDER BY orders DESC LIMIT 4",
+    `SELECT substr(createdAt, 12, 2) || ':00' AS hour, COUNT(*) AS orders FROM orders WHERE ${settledSale('')} AND createdAt BETWEEN ? AND ? GROUP BY hour ORDER BY orders DESC LIMIT 4`,
     [ts(from), ts(to, true)]
   )
   const peak = peakHours[0]

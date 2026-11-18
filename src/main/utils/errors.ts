@@ -10,6 +10,14 @@ export type ErrorCode =
   | 'ALREADY_INITIALIZED'
   | 'NOT_INITIALIZED'
   | 'INVALID_STATUS'
+  /** The order is paid, so what it costs can never change again. */
+  | 'ORDER_SETTLED'
+  /** This kind of order is paid before the kitchen starts on it. */
+  | 'PAYMENT_REQUIRED_FIRST'
+  /** It cannot be handed over while it still owes money. */
+  | 'PAYMENT_REQUIRED'
+  /** Every item is already with the kitchen. */
+  | 'NOTHING_TO_SEND'
   | 'INSUFFICIENT_STOCK'
   | 'SESSION_CLOSED'
   | 'CHANNEL_NOT_ALLOWED'

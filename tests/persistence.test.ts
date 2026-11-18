@@ -6,6 +6,8 @@ import { closeDatabase, dbAll, dbGet, dbWrite, openDatabase, transaction } from 
 import { seedCoreData } from '../src/main/db/seed'
 import { completeSetup } from '../src/main/services/setup'
 import { cancelOrder, createOrder, payOrder, sendToKitchen } from '../src/main/services/orders'
+import { setItemKitchenStatus } from '../src/main/services/kitchen'
+import { updateSettings } from '../src/main/services/settings'
 import { clearSession, setSession } from '../src/main/security/session'
 
 /**
@@ -60,6 +62,34 @@ describe('a database that lives in a file', () => {
     const reread = dbGet<{ orderNumber: string; status: string }>('SELECT orderNumber, status FROM orders WHERE id = ?', [order.id])
     expect(reread?.orderNumber).toBe(order.orderNumber)
     expect(reread?.status).toBe('completed')
+  })
+
+  it('carries a prepaid sale from the counter to the kitchen and out', async () => {
+    /* The other order of business, on a real file: the money first, then the
+       cooking, and the order closing itself when the dish is served. Closing
+       happens inside the kitchen's own transaction, which is exactly the shape
+       that used to fail against a file. */
+    updateSettings({ orderFlow: { takeaway: 'payFirst' } })
+    const order = createOrder({ type: 'takeaway', items: [{ productId: product().id, qty: 1 }] })
+    const paid = payOrder({ orderId: order.id, payments: [{ method: 'cash', amountCents: order.totalCents }] })
+    expect(paid.status).toBe('sent')
+    expect(paid.paidAt).not.toBeNull()
+    expect(paid.fiscalSeq).toBe(1)
+
+    const item = dbGet<{ id: number }>('SELECT id FROM order_items WHERE orderId = ?', [order.id])!
+    setItemKitchenStatus({ itemId: item.id, status: 'served' })
+
+    closeDatabase()
+    await openDatabase(file)
+    const reread = dbGet<{ status: string; paidAt: string | null; completedAt: string | null; fiscalSeq: number | null }>(
+      'SELECT status, paidAt, completedAt, fiscalSeq FROM orders WHERE id = ?',
+      [order.id]
+    )
+    expect(reread?.status).toBe('completed')
+    expect(reread?.paidAt).not.toBeNull()
+    expect(reread?.completedAt).not.toBeNull()
+    /* The seal was struck at payment and must not have moved since. */
+    expect(reread?.fiscalSeq).toBe(1)
   })
 
   it('leaves no half-finished operation behind when one fails', () => {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Archive, CalendarCheck, KeyRound, Plug, DatabaseBackup, Download, FileCheck2, FolderOpen, Lock, MonitorOff, MonitorSmartphone, Printer, ReceiptText, RotateCcw, Save, ShieldCheck, Store, Trash2 } from 'lucide-react'
 import type { ApiToken, AppSettings, BackupFile, Branch, FiscalArchive, FiscalArchiveReport, FiscalClosure, IntegrityReport, StampBracket } from '@shared/types'
-import { PAYMENT_METHOD_LABELS } from '@shared/constants'
+import { ORDER_FLOWS, ORDER_TYPES, PAYMENT_METHOD_LABELS, type OrderFlow } from '@shared/constants'
 import { api } from '../lib/api'
 import { useApi } from '../lib/hooks'
 import { formatDateTime, formatMoney } from '../lib/format'
@@ -105,7 +105,9 @@ export default function Settings() {
         stampEnabled: form.stampEnabled,
         stampBrackets: form.stampBrackets,
         stampMinCents: form.stampMinCents,
-        stampMaxCents: form.stampMaxCents
+        stampMaxCents: form.stampMaxCents,
+        orderFlow: form.orderFlow,
+        autoSendOnPrepay: form.autoSendOnPrepay
       })
       setSettings(updated)
       setForm(updated)
@@ -324,6 +326,46 @@ export default function Settings() {
                 )
               })}
             </div>
+          </div>
+
+          {/* Which comes first, the money or the kitchen. Set per order type,
+              because one restaurant commonly does both: guests at tables settle
+              at the end, the counter takes the money before the grill is lit. */}
+          <div className="space-y-2 border-t border-ink-100 pt-4 dark:border-ink-800">
+            <p className="afus-label">{t('settings.flowTitle')}</p>
+            <p className="text-[11px] leading-relaxed text-ink-500">{t('settings.flowHint')}</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {ORDER_TYPES.map((orderType) => (
+                <Field key={orderType.value} label={orderType.label[language]}>
+                  <Select
+                    value={form.orderFlow?.[orderType.value] ?? 'payLast'}
+                    onChange={(event) =>
+                      patch({
+                        orderFlow: { ...(form.orderFlow ?? {}), [orderType.value]: event.target.value as OrderFlow }
+                      })
+                    }
+                  >
+                    {ORDER_FLOWS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label[language]}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              ))}
+            </div>
+            <label className="flex items-start gap-2 pt-1 text-xs text-ink-600 dark:text-ink-300">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-3.5 w-3.5 rounded"
+                checked={form.autoSendOnPrepay}
+                onChange={(event) => patch({ autoSendOnPrepay: event.target.checked })}
+              />
+              <span>
+                {t('settings.autoSendOnPrepay')}
+                <span className="block text-[11px] text-ink-400">{t('settings.autoSendOnPrepayHint')}</span>
+              </span>
+            </label>
           </div>
         </Card>
       </div>

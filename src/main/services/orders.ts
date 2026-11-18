@@ -2,8 +2,21 @@
  * Order lifecycle: dine-in / takeaway / delivery / pre-order, from opening a
  * table to payment. Every mutation returns the full assembled Order so the POS
  * can re-render from one source of truth. Totals are recomputed server-side.
+ *
+ * Paying and finishing are two different things, because restaurants do them in
+ * both orders. At a table the kitchen cooks, the guest eats, and the bill is
+ * settled at the end. At a counter the guest pays first and the order is only
+ * then fired to the kitchen. The second case used to be impossible here:
+ * paying closed the order outright, so nothing could be sent afterwards.
+ *
+ *   paidAt      nothing more is owed — the fiscal moment of the sale
+ *   sentAt      the kitchen has the order
+ *   completedAt the food was handed over and the order is closed
+ *
+ * `settings.orderFlow` says which order to expect, per order type; see
+ * ORDER_FLOWS. It decides defaults and guardrails, never what is possible.
  */
-import type { Order, OrderItem, OrderSummary } from '@shared/types'
+import type { Order, OrderFlow, OrderItem, OrderSummary } from '@shared/types'
 import { dbAll, dbGet, dbWrite, transaction } from '../db/client'
 import { currentUserId, requireSession } from '../security/session'
 import { getSettings } from './settings'
@@ -46,6 +59,24 @@ export interface CreateOrderInput {
 }
 
 const OPEN_STATUSES = ['new', 'sent', 'preparing', 'ready', 'inProgress', 'held']
+
+/**
+ * Which comes first for this kind of order, the money or the kitchen. An order
+ * type the owner never configured falls back to settling at the end, which is
+ * what a restaurant does unless it decides otherwise.
+ */
+export function flowFor(type: string): OrderFlow {
+  const configured = getSettings().orderFlow?.[type]
+  return configured === 'payFirst' || configured === 'flexible' ? configured : 'payLast'
+}
+
+/** How many of the order's items have never been fired to the kitchen. */
+function unsentCount(orderId: number): number {
+  return (
+    dbGet<{ n: number }>("SELECT COUNT(*) AS n FROM order_items WHERE orderId = ? AND status = 'active'", [orderId])
+      ?.n ?? 0
+  )
+}
 
 function nextOrderNumber(): string {
   const row = dbGet<{ n: number }>('SELECT COUNT(*) AS n FROM orders')
@@ -295,8 +326,20 @@ function assertOpen(orderId: number): Record<string, unknown> {
   return order
 }
 
+/**
+ * For anything that changes what is owed. Once an order is settled its figures
+ * are sealed into the fiscal chain, so they can never move again — the guest
+ * paid for exactly this. Another dish is another order, which is also how a
+ * counter actually works.
+ */
+function assertEditable(orderId: number): Record<string, unknown> {
+  const order = assertOpen(orderId)
+  if (order.paidAt) throw new AppError('ORDER_SETTLED', 'The order is paid; its contents can no longer change')
+  return order
+}
+
 export function addItem(input: { orderId: number } & CreateItemInput): Order {
-  assertOpen(input.orderId)
+  assertEditable(input.orderId)
   transaction(() => {
     insertLine(input.orderId, input)
     recompute(input.orderId)
@@ -310,7 +353,7 @@ export function updateItem(input: { itemId: number; qty?: number; note?: string 
     [input.itemId]
   )
   if (!item) throw new AppError('NOT_FOUND')
-  assertOpen(item.orderId)
+  assertEditable(item.orderId)
   transaction(() => {
     if (input.qty !== undefined) {
       const qty = Math.max(1, Math.floor(input.qty))
@@ -329,7 +372,7 @@ export function updateItem(input: { itemId: number; qty?: number; note?: string 
 export function removeItem(itemId: number): Order {
   const item = dbGet<{ orderId: number }>('SELECT orderId FROM order_items WHERE id = ?', [itemId])
   if (!item) throw new AppError('NOT_FOUND')
-  assertOpen(item.orderId)
+  assertEditable(item.orderId)
   transaction(() => {
     dbWrite("UPDATE order_items SET status = 'removed' WHERE id = ?", [itemId])
     recompute(item.orderId)
@@ -338,7 +381,7 @@ export function removeItem(itemId: number): Order {
 }
 
 export function setDiscount(input: { orderId: number; discountCents: number; discountReason: string | null }): Order {
-  assertOpen(input.orderId)
+  assertEditable(input.orderId)
   transaction(() => {
     /* Typed by hand on purpose, so it replaces whatever offer was on the order. */
     dbWrite('UPDATE orders SET discountCents = ?, discountReason = ?, offerId = NULL, offerDiscountCents = 0 WHERE id = ?', [
@@ -356,7 +399,7 @@ export function setDiscount(input: { orderId: number; discountCents: number; dis
  * customer the most. Passing no offer and `auto: false` takes the offer off.
  */
 export function applyOffer(input: { orderId: number; offerId?: number | null; auto?: boolean }): Order {
-  assertOpen(input.orderId)
+  assertEditable(input.orderId)
   transaction(() => {
     let offerId: number | null = null
     let discountCents = 0
@@ -400,37 +443,63 @@ export function setNote(input: { orderId: number; note: string | null }): Order 
 
 export function setStatus(input: { orderId: number; status: string; note?: string | null }): Order {
   const order = assertOpen(input.orderId)
+  /* Finishing and cancelling are not status edits. They seal the sale, take the
+     ingredients off the stock, free the table and write the fiscal record, so
+     they have their own operations and must not be reachable from here — a
+     sale closed this way would never be sealed and would vanish from the
+     fiscal chain. */
+  if (input.status === 'completed') throw new AppError('VALIDATION', 'Hand the order over instead')
+  if (input.status === 'cancelled') throw new AppError('VALIDATION', 'Cancel the order instead')
   logStatus(input.orderId, String(order.status), input.status, input.note ?? null)
   dbWrite('UPDATE orders SET status = ?, updatedAt = ? WHERE id = ?', [input.status, nowStamp(), input.orderId])
   return buildOrder(input.orderId)
 }
 
+/**
+ * Write a kitchen ticket for every item not yet fired, and move the order to
+ * `sent`. Shared by the Send button and by a prepaid order that fires itself
+ * the moment the money is in. Returns how many items went out.
+ */
+function fireItems(orderId: number, order: Record<string, unknown>): number {
+  const items = dbAll<{ id: number; station: string }>(
+    "SELECT id, station FROM order_items WHERE orderId = ? AND status = 'active'",
+    [orderId]
+  )
+  for (const item of items) {
+    dbWrite(
+      "INSERT INTO kitchen_tickets (orderId, orderItemId, station, status, createdAt, updatedAt) VALUES (?, ?, ?, 'pending', ?, ?)",
+      [orderId, item.id, item.station, nowStamp(), nowStamp()]
+    )
+    dbWrite("UPDATE order_items SET status = 'pending' WHERE id = ?", [item.id])
+  }
+  if (items.length > 0 && !order.sentAt) {
+    dbWrite('UPDATE orders SET sentAt = ? WHERE id = ?', [nowStamp(), orderId])
+  }
+  if (order.status === 'new' || order.status === 'held') {
+    logStatus(orderId, String(order.status), 'sent')
+    dbWrite("UPDATE orders SET status = 'sent', isHeld = 0, updatedAt = ? WHERE id = ?", [nowStamp(), orderId])
+  }
+  return items.length
+}
+
 /** Fire the order to the kitchen: a ticket per not-yet-sent item, items -> preparing. */
 export function sendToKitchen(orderId: number): Order {
   const order = assertOpen(orderId)
+  /* Where the house takes the money first, the kitchen does not start until it
+     has. The owner can switch the type to 'flexible' if they want no such rule. */
+  if (flowFor(String(order.type)) === 'payFirst' && Number(order.dueCents ?? 0) > 0) {
+    throw new AppError('PAYMENT_REQUIRED_FIRST', 'This kind of order is paid before it is prepared')
+  }
+  if (unsentCount(orderId) === 0) throw new AppError('NOTHING_TO_SEND', 'Every item is already with the kitchen')
   transaction(() => {
-    const items = dbAll<{ id: number; station: string }>(
-      "SELECT id, station FROM order_items WHERE orderId = ? AND status = 'active'",
-      [orderId]
-    )
-    for (const item of items) {
-      dbWrite(
-        "INSERT INTO kitchen_tickets (orderId, orderItemId, station, status, createdAt, updatedAt) VALUES (?, ?, ?, 'pending', ?, ?)",
-        [orderId, item.id, item.station, nowStamp(), nowStamp()]
-      )
-      dbWrite("UPDATE order_items SET status = 'pending' WHERE id = ?", [item.id])
-    }
-    if (order.status === 'new' || order.status === 'held') {
-      logStatus(orderId, String(order.status), 'sent')
-      dbWrite("UPDATE orders SET status = 'sent', isHeld = 0, updatedAt = ? WHERE id = ?", [nowStamp(), orderId])
-    }
+    fireItems(orderId, order)
   })
   writeAudit('orders.sendToKitchen', 'order', orderId)
   return buildOrder(orderId)
 }
 
 export function holdOrder(orderId: number): Order {
-  assertOpen(orderId)
+  assertEditable(orderId)
   dbWrite("UPDATE orders SET isHeld = 1, status = 'held', updatedAt = ? WHERE id = ?", [nowStamp(), orderId])
   return buildOrder(orderId)
 }
@@ -441,9 +510,64 @@ export function resumeOrder(orderId: number): Order {
   return buildOrder(orderId)
 }
 
+/**
+ * Nothing more is owed. This is the moment the sale becomes real, whether or not
+ * the food has left the kitchen: ingredients come off the stock, the offer is
+ * counted as used, the customer earns their points, and the sale is sealed into
+ * the fiscal chain. It happens once — a second call does nothing.
+ */
+function markSettled(orderId: number, userId: number | null): void {
+  const row = dbGet<{ paidAt: string | null; offerId: number | null }>('SELECT paidAt, offerId FROM orders WHERE id = ?', [
+    orderId
+  ])
+  if (!row || row.paidAt) return
+  dbWrite('UPDATE orders SET paidAt = ?, updatedAt = ? WHERE id = ?', [nowStamp(), nowStamp(), orderId])
+  /* Recipes consume their ingredients the moment the sale is final. */
+  consumeStockForOrder(orderId, userId)
+  /* A capped offer really runs out, and the customer gets their points. */
+  markOfferUsed(row.offerId)
+  earnForOrder(orderId, userId)
+  /* Seal the sale: sequential fiscal number + chained hash. */
+  sealOrder(orderId)
+}
+
+/** Hand the order over and close it: everything outstanding counts as served. */
+function closeOut(orderId: number, order: Record<string, unknown>): void {
+  logStatus(orderId, String(order.status), 'completed')
+  dbWrite("UPDATE orders SET status = 'completed', completedAt = ?, updatedAt = ? WHERE id = ?", [
+    nowStamp(),
+    nowStamp(),
+    orderId
+  ])
+  dbWrite(
+    "UPDATE order_items SET status = 'served' WHERE orderId = ? AND status IN ('active','pending','preparing','ready')",
+    [orderId]
+  )
+  setTableStatus((order as { tableId: number | null }).tableId, 'free')
+}
+
+/**
+ * Does paying also finish this order?
+ *  - payLast  yes. The guest ate and is settling the bill; this is the last act,
+ *             and it stays a single tap for a house that works that way.
+ *  - payFirst no. The money comes in before anything is cooked.
+ *  - flexible only if the kitchen has already had everything — otherwise there
+ *             is food still to make and the order has to stay open.
+ * The caller can always say outright with `closeNow`.
+ */
+function closesOnPayment(orderId: number, type: string, closeNow: boolean | undefined): boolean {
+  if (closeNow !== undefined) return closeNow
+  const flow = flowFor(type)
+  if (flow === 'payFirst') return false
+  if (flow === 'flexible') return unsentCount(orderId) === 0
+  return true
+}
+
 export function payOrder(input: {
   orderId: number
   payments: { method: string; amountCents: number; reference?: string | null }[]
+  /** Force the decision instead of letting the order type's flow make it. */
+  closeNow?: boolean
 }): Order {
   const order = assertOpen(input.orderId)
   const session = requireSession()
@@ -477,29 +601,63 @@ export function payOrder(input: {
       nowStamp(),
       input.orderId
     ])
-    if (paidCents >= totalCents) {
-      logStatus(input.orderId, String(order.status), 'completed')
-      dbWrite("UPDATE orders SET status = 'completed', completedAt = ? WHERE id = ?", [nowStamp(), input.orderId])
-      dbWrite(
-        "UPDATE order_items SET status = 'served' WHERE orderId = ? AND status IN ('pending','preparing','ready','active')",
-        [input.orderId]
-      )
-      setTableStatus((order as { tableId: number | null }).tableId, 'free')
-      /* Recipes consume their ingredients the moment the sale is final. */
-      consumeStockForOrder(input.orderId, session.userId)
-      /* A capped offer really runs out, and the customer gets their points. */
-      markOfferUsed(dbGet<{ offerId: number | null }>('SELECT offerId FROM orders WHERE id = ?', [input.orderId])?.offerId)
-      earnForOrder(input.orderId, session.userId)
-      /* Seal the sale: sequential fiscal number + chained hash. */
-      sealOrder(input.orderId)
+    if (paidCents < totalCents) return
+
+    markSettled(input.orderId, session.userId)
+    if (closesOnPayment(input.orderId, String(order.type), input.closeNow)) {
+      closeOut(input.orderId, order)
+      return
+    }
+    /* Paid and still to be made. Unless the house would rather press Send
+       itself, the kitchen gets it now — that is the whole point of paying up
+       front, and nobody should have to remember a second button. */
+    if (getSettings().autoSendOnPrepay && unsentCount(input.orderId) > 0) {
+      fireItems(input.orderId, dbGet<Record<string, unknown>>('SELECT * FROM orders WHERE id = ?', [input.orderId]) ?? order)
     }
   })
   writeAudit('orders.pay', 'order', input.orderId)
   return buildOrder(input.orderId)
 }
 
+/**
+ * Hand over a paid order and close it. This is the end of a pay-first sale: the
+ * money came in earlier, the kitchen has finished, and the guest now has the
+ * food. The kitchen screen calls it on its own when the last item is served.
+ */
+export function completeOrder(orderId: number): Order {
+  const order = assertOpen(orderId)
+  const session = requireSession()
+  if (Number(order.dueCents ?? 0) > 0) {
+    throw new AppError('PAYMENT_REQUIRED', 'The order still owes money')
+  }
+  const itemCount =
+    dbGet<{ n: number }>("SELECT COUNT(*) AS n FROM order_items WHERE orderId = ? AND status != 'removed'", [orderId])?.n ?? 0
+  if (itemCount === 0) throw new AppError('VALIDATION', 'The order is empty')
+  transaction(() => {
+    /* A giveaway owes nothing and was never "paid", but it is still a sale and
+       still has to be sealed and taken off the stock. */
+    markSettled(orderId, session.userId)
+    closeOut(orderId, order)
+  })
+  writeAudit('orders.complete', 'order', orderId)
+  return buildOrder(orderId)
+}
+
 export function cancelOrder(input: { orderId: number; reason: string; stockPolicy?: string | null }): Order {
   const order = assertOpen(input.orderId)
+  /* A settled sale is sealed into the fiscal chain and can never be made to
+     disappear. Before, this was true only by accident: paying closed the order,
+     so cancelling it was already impossible. A prepaid order stays open, so the
+     rule has to be stated. Giving the money back is a refund — its own
+     document — not the un-happening of a sale. */
+  if (order.paidAt) throw new AppError('ORDER_SETTLED', 'A paid sale cannot be cancelled; refund it instead')
+  /* Part-payment on an order that is being abandoned: the cash was taken and
+     has to go back out, or the drawer will not add up at closing time. */
+  const refundCents =
+    dbGet<{ total: number }>(
+      "SELECT COALESCE(SUM(amountCents), 0) AS total FROM order_payments WHERE orderId = ? AND method = 'cash'",
+      [input.orderId]
+    )?.total ?? 0
   transaction(() => {
     logStatus(input.orderId, String(order.status), 'cancelled', input.reason)
     dbWrite("UPDATE orders SET status = 'cancelled', cancelledAt = ?, cancelReason = ?, updatedAt = ? WHERE id = ?", [
@@ -512,8 +670,22 @@ export function cancelOrder(input: { orderId: number; reason: string; stockPolic
     if (input.stockPolicy === 'restore') restoreStockForOrder(input.orderId, currentUserId())
     releaseOfferUse((order as { offerId: number | null }).offerId)
     reverseForOrder(input.orderId, currentUserId())
+    if (refundCents > 0) {
+      postCashMovement({
+        type: 'refund',
+        amountCents: refundCents,
+        refType: 'order',
+        refId: input.orderId,
+        note: input.reason,
+        userId: currentUserId()
+      })
+    }
   })
-  writeAudit('orders.cancel', 'order', input.orderId, { reason: input.reason, stockPolicy: input.stockPolicy ?? null })
+  writeAudit('orders.cancel', 'order', input.orderId, {
+    reason: input.reason,
+    stockPolicy: input.stockPolicy ?? null,
+    refundCents
+  })
   return buildOrder(input.orderId)
 }
 
@@ -529,8 +701,8 @@ export function moveTable(input: { orderId: number; tableId: number | null }): O
 }
 
 export function mergeOrders(input: { fromOrderId: number; toOrderId: number }): Order {
-  assertOpen(input.fromOrderId)
-  assertOpen(input.toOrderId)
+  assertEditable(input.fromOrderId)
+  assertEditable(input.toOrderId)
   transaction(() => {
     dbWrite('UPDATE order_items SET orderId = ? WHERE orderId = ?', [input.toOrderId, input.fromOrderId])
     dbWrite(
@@ -569,7 +741,8 @@ export function listOrders(input: { status?: string | null; limit?: number; bran
   params.push(Math.min(500, input.limit ?? 200))
   return dbAll<OrderSummary>(
     `SELECT o.id, o.orderNumber, o.type, o.status, t.name AS tableName, c.name AS customerName,
-            u.fullName AS waiterName, o.totalCents, o.paidCents, o.dueCents, o.isHeld, o.createdAt, o.scheduledFor,
+            u.fullName AS waiterName, o.totalCents, o.paidCents, o.dueCents, o.isHeld, o.createdAt,
+            o.paidAt, o.sentAt, o.scheduledFor,
             (SELECT COALESCE(SUM(qty),0) FROM order_items oi WHERE oi.orderId = o.id AND oi.status != 'removed') AS itemCount
        FROM orders o
        LEFT JOIN dining_tables t ON t.id = o.tableId

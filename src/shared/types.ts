@@ -1,4 +1,4 @@
-import type { Lang, Localized, Unit } from './constants'
+import type { Lang, Localized, OrderFlow, Unit } from './constants'
 
 export type {
   DeliveryStatus,
@@ -6,6 +6,7 @@ export type {
   Lang,
   Localized,
   MovementType,
+  OrderFlow,
   OrderItemStatus,
   OrderStatus,
   OrderType,
@@ -209,6 +210,12 @@ export interface AppSettings {
   paymentMethods: string[]
   kitchenAlertMinutes: number
   preorderLeadMinutes: number
+  /** Which comes first, the money or the kitchen — one choice per order type.
+      See ORDER_FLOWS. */
+  orderFlow: Record<string, OrderFlow>
+  /** In a pay-first order, fire the kitchen the moment the money is in,
+      instead of waiting for someone to press Send. */
+  autoSendOnPrepay: boolean
 }
 
 export interface SetupStatus {
@@ -375,6 +382,10 @@ export interface KitchenTicket {
   elapsedMinutes: number
   late: boolean
   note: string | null
+  /** Already paid for — the kitchen can hand it straight over when it is done. */
+  prepaid: boolean
+  /** What is still owed, so the counter knows before it releases the food. */
+  dueCents: number
   items: OrderItem[]
 }
 
@@ -444,6 +455,12 @@ export interface Order {
   scheduledFor: string | null
   createdAt: string
   updatedAt: string
+  /** The moment nothing more was owed. This is the fiscal moment of the sale,
+      and it can come before the food is cooked (payment at the counter). */
+  paidAt: string | null
+  /** The moment the kitchen was given the order. */
+  sentAt: string | null
+  /** The moment the order was handed over and closed. */
   completedAt: string | null
   cancelledAt: string | null
   cancelReason: string | null
@@ -468,6 +485,8 @@ export interface OrderSummary {
   itemCount: number
   isHeld: boolean
   createdAt: string
+  paidAt: string | null
+  sentAt: string | null
   scheduledFor: string | null
 }
 

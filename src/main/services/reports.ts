@@ -9,6 +9,7 @@ import { appPaths } from '../paths'
 import { getSettings } from './settings'
 import { branchClause, isHeadOffice, resolveBranchFilter } from './scope'
 import { baseValueCents, fromBase, unitFactor } from './units'
+import { settledSale } from './sale'
 
 type Row = Record<string, string | number | null>
 
@@ -33,7 +34,7 @@ export function salesReport(from?: string | null, to?: string | null): ReportTab
     `SELECT substr(createdAt, 1, 10) AS date, COUNT(*) AS orders, SUM(subtotalCents) AS grossCents, SUM(discountCents) AS discountCents,
             SUM(taxCents) AS taxCents, SUM(stampCents) AS stampCents, SUM(totalCents) AS totalCents,
             ROUND(AVG(totalCents)) AS averageCents
-       FROM orders o WHERE o.status = 'completed' AND o.createdAt BETWEEN ? AND ?${branchSql().sql} GROUP BY date ORDER BY date`,
+       FROM orders o WHERE ${settledSale('o')} AND o.createdAt BETWEEN ? AND ?${branchSql().sql} GROUP BY date ORDER BY date`,
     [r.fromTs, r.toTs, ...branchSql().params]
   )
   return {
@@ -59,7 +60,7 @@ export function productsReport(from?: string | null, to?: string | null): Report
             SUM(oi.lineTotalCents) AS revenueCents, SUM(oi.qty * p.costCents) AS costCents,
             SUM(oi.lineTotalCents) - SUM(oi.qty * p.costCents) AS marginCents
        FROM order_items oi JOIN orders o ON o.id = oi.orderId LEFT JOIN products p ON p.id = oi.productId
-      WHERE o.status = 'completed' AND o.createdAt BETWEEN ? AND ? AND oi.status != 'removed'${branchSql().sql}
+      WHERE ${settledSale('o')} AND o.createdAt BETWEEN ? AND ? AND oi.status != 'removed'${branchSql().sql}
       GROUP BY oi.productId ORDER BY revenueCents DESC`,
     [r.fromTs, r.toTs, ...branchSql().params]
   ).map((row) => ({ ...row, marginPct: Number(row.revenueCents) > 0 ? Math.round((Number(row.marginCents) * 10_000) / Number(row.revenueCents)) : 0 }))
@@ -84,7 +85,7 @@ export function paymentsReport(from?: string | null, to?: string | null): Report
   const rows = dbAll<Row>(
     `SELECT p.method, COUNT(*) AS count, SUM(p.amountCents) AS amountCents
        FROM order_payments p JOIN orders o ON o.id = p.orderId
-      WHERE o.status = 'completed' AND p.createdAt BETWEEN ? AND ?${branchSql().sql} GROUP BY p.method ORDER BY amountCents DESC`,
+      WHERE ${settledSale('o')} AND p.createdAt BETWEEN ? AND ?${branchSql().sql} GROUP BY p.method ORDER BY amountCents DESC`,
     [r.fromTs, r.toTs, ...branchSql().params]
   )
   return {
@@ -103,7 +104,7 @@ export function orderTypesReport(from?: string | null, to?: string | null): Repo
   const r = range(from, to)
   const rows = dbAll<Row>(
     `SELECT type, COUNT(*) AS orders, SUM(totalCents) AS totalCents, ROUND(AVG(totalCents)) AS averageCents
-       FROM orders o WHERE o.status = 'completed' AND o.createdAt BETWEEN ? AND ?${branchSql().sql} GROUP BY o.type ORDER BY totalCents DESC`,
+       FROM orders o WHERE ${settledSale('o')} AND o.createdAt BETWEEN ? AND ?${branchSql().sql} GROUP BY o.type ORDER BY totalCents DESC`,
     [r.fromTs, r.toTs, ...branchSql().params]
   )
   return {
@@ -171,7 +172,7 @@ export function staffReport(from?: string | null, to?: string | null): ReportTab
     `SELECT u.fullName AS name, COUNT(o.id) AS orders, SUM(o.totalCents) AS totalCents, ROUND(AVG(o.totalCents)) AS averageCents,
             (SELECT COALESCE(SUM(a.minutes), 0) FROM attendance a WHERE a.userId = u.id AND a.clockIn BETWEEN ? AND ?) AS minutes
        FROM users u JOIN orders o ON o.userId = u.id
-      WHERE o.status = 'completed' AND o.createdAt BETWEEN ? AND ?${branchSql().sql} GROUP BY u.id ORDER BY totalCents DESC`,
+      WHERE ${settledSale('o')} AND o.createdAt BETWEEN ? AND ?${branchSql().sql} GROUP BY u.id ORDER BY totalCents DESC`,
     [r.fromTs, r.toTs, r.fromTs, r.toTs, ...branchSql().params]
   )
   return {
@@ -301,7 +302,7 @@ export function branchesReport(from?: string | null, to?: string | null): Report
             ROUND(AVG(o.totalCents)) AS averageCents, SUM(o.taxCents) AS taxCents,
             SUM(o.discountCents) AS discountCents
        FROM orders o LEFT JOIN branches b ON b.id = o.branchId
-      WHERE o.status = 'completed' AND o.createdAt BETWEEN ? AND ?
+      WHERE ${settledSale('o')} AND o.createdAt BETWEEN ? AND ?
       GROUP BY o.branchId ORDER BY totalCents DESC`,
     [r.fromTs, r.toTs]
   )
@@ -433,6 +434,6 @@ export function exportReport(input: { type: string; from?: string | null; to?: s
 
 export function reportTotals(from: string, to: string): { salesCents: number; orders: number } {
   const r = range(from, to)
-  const row = dbGet<{ total: number | null; count: number }>("SELECT SUM(totalCents) AS total, COUNT(*) AS count FROM orders WHERE status = 'completed' AND createdAt BETWEEN ? AND ?", [r.fromTs, r.toTs])
+  const row = dbGet<{ total: number | null; count: number }>(`SELECT SUM(totalCents) AS total, COUNT(*) AS count FROM orders WHERE ${settledSale('')} AND createdAt BETWEEN ? AND ?`, [r.fromTs, r.toTs])
   return { salesCents: row?.total ?? 0, orders: row?.count ?? 0 }
 }

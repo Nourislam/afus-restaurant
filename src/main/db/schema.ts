@@ -5,7 +5,7 @@
  * column name, so services hand domain objects straight to the renderer without
  * a mapping layer (and without the drift that comes with one).
  */
-export const SCHEMA_VERSION = 9
+export const SCHEMA_VERSION = 10
 
 const V1 = `
 CREATE TABLE IF NOT EXISTS roles (
@@ -583,6 +583,22 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 );
 `
 
+/* V10 — the two orders of business. Some restaurants take the money at the
+   counter before anything is cooked (fast food, takeaway, a pre-order), others
+   cook and serve first and settle at the end (table service). Until now paying
+   *was* finishing the order, so a prepaid order could never be fired to the
+   kitchen afterwards. Payment and handover are now two separate facts:
+     paidAt  — the moment nothing more is owed (the fiscal event),
+     sentAt  — the moment the kitchen was given the order.
+   `paidAt` is backfilled from `completedAt` so sales already sealed keep the
+   exact same hash and the chain still verifies. */
+const V10 = `
+ALTER TABLE orders ADD COLUMN paidAt TEXT;
+ALTER TABLE orders ADD COLUMN sentAt TEXT;
+UPDATE orders SET paidAt = completedAt WHERE completedAt IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_orders_paidAt ON orders (paidAt);
+`
+
 export const MIGRATIONS: Record<number, string> = {
   1: V1,
   2: V2,
@@ -592,5 +608,6 @@ export const MIGRATIONS: Record<number, string> = {
   6: V6,
   7: V7,
   8: V8,
-  9: V9
+  9: V9,
+  10: V10
 }

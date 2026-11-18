@@ -3,6 +3,7 @@ import {
   addItem,
   buildOrder,
   cancelOrder,
+  completeOrder,
   createOrder,
   getOrder,
   holdOrder,
@@ -161,9 +162,20 @@ export const ordersChannels = () =>
         permission: 'orders.close',
         schema: z.object({
           orderId: z.number().int().positive(),
-          payments: z.array(z.object({ method: z.string().min(1).max(24), amountCents: z.number().int(), reference: z.string().max(80).nullish() })).min(1)
+          payments: z.array(z.object({ method: z.string().min(1).max(24), amountCents: z.number().int(), reference: z.string().max(80).nullish() })).min(1),
+          closeNow: z.boolean().optional()
         }),
         handler: (input: Parameters<typeof payOrder>[0]) => payOrder(input)
+      }
+    },
+    {
+      /* Handing over a paid order. Separate from paying, because a counter takes
+         the money first and gives the food out later. */
+      channel: 'orders.complete',
+      definition: {
+        permission: 'pos.use',
+        schema: z.object({ orderId: z.number().int().positive() }),
+        handler: (input: { orderId: number }) => completeOrder(input.orderId)
       }
     },
     {

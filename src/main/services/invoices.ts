@@ -62,15 +62,18 @@ export function issueInvoice(input: { orderId: number; buyer: InvoiceBuyer }): I
   const order = dbGet<{
     id: number
     status: string
+    paidAt: string | null
     subtotalCents: number
     discountCents: number
     taxCents: number
     stampCents: number
     totalCents: number
-  }>('SELECT id, status, subtotalCents, discountCents, taxCents, stampCents, totalCents FROM orders WHERE id = ?', [input.orderId])
+  }>('SELECT id, status, paidAt, subtotalCents, discountCents, taxCents, stampCents, totalCents FROM orders WHERE id = ?', [input.orderId])
   if (!order) throw new AppError('NOT_FOUND')
-  /* Only a completed sale: its figures can never change afterwards. */
-  if (order.status !== 'completed') throw new AppError('INVALID_STATUS', 'Finish the sale first')
+  /* Only a settled sale: once it owes nothing its figures can never change. A
+     guest who paid at the counter can take their facture without waiting for
+     the food. */
+  if (order.status === 'cancelled' || !order.paidAt) throw new AppError('INVALID_STATUS', 'Settle the sale first')
 
   const buyerName = input.buyer.name.trim()
   if (!buyerName) throw new AppError('VALIDATION', 'The invoice needs a buyer')

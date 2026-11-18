@@ -73,9 +73,9 @@ function collect(year: number): Payload {
     sales: dbAll<Record<string, unknown>>(
       `SELECT o.id, o.orderNumber, o.fiscalSeq, o.fiscalHash, o.fiscalPrevHash, o.type, o.status,
               o.subtotalCents, o.discountCents, o.taxCents, o.stampCents, o.totalCents, o.paidCents,
-              o.branchId, o.createdAt, o.completedAt, u.fullName AS seller
+              o.branchId, o.createdAt, COALESCE(o.paidAt, o.completedAt) AS soldAt, o.paidAt, o.completedAt, u.fullName AS seller
          FROM orders o LEFT JOIN users u ON u.id = o.userId
-        WHERE o.fiscalSeq IS NOT NULL AND o.completedAt BETWEEN ? AND ?
+        WHERE o.fiscalSeq IS NOT NULL AND COALESCE(o.paidAt, o.completedAt) BETWEEN ? AND ?
         ORDER BY o.fiscalSeq`,
       [from, to]
     ),

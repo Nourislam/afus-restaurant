@@ -5,8 +5,9 @@
  */
 import type { KitchenBoard, KitchenTicket, OrderItem } from '@shared/types'
 import { STATIONS } from '@shared/constants'
-import { dbAll, dbGet, dbWrite } from '../db/client'
+import { dbAll, dbGet, dbWrite, transaction } from '../db/client'
 import { getSettings } from './settings'
+import { completeOrder } from './orders'
 import { AppError } from '../utils/errors'
 import { nowStamp } from '../utils/dates'
 
@@ -30,11 +31,13 @@ export function kitchenBoard(input: { station?: string | null } = {}): KitchenBo
     status: string
     note: string | null
     createdAt: string
+    paidAt: string | null
+    dueCents: number
     tableName: string | null
     waiterName: string | null
     customerName: string | null
   }>(
-    `SELECT o.id, o.orderNumber, o.type, o.status, o.note, o.createdAt,
+    `SELECT o.id, o.orderNumber, o.type, o.status, o.note, o.createdAt, o.paidAt, o.dueCents,
             t.name AS tableName, u.fullName AS waiterName, c.name AS customerName
        FROM orders o
        LEFT JOIN dining_tables t ON t.id = o.tableId
@@ -82,6 +85,10 @@ export function kitchenBoard(input: { station?: string | null } = {}): KitchenBo
       createdAt: order.createdAt,
       elapsedMinutes,
       late,
+      /* The counter has to know whether the food is already paid for before it
+         lets it go out of the door. */
+      prepaid: Boolean(order.paidAt),
+      dueCents: order.dueCents,
       items
     })
   }
@@ -99,18 +106,47 @@ export function kitchenBoard(input: { station?: string | null } = {}): KitchenBo
   return { tickets, stations, counts }
 }
 
+/**
+ * A prepaid order that has just had its last dish served is finished: the money
+ * came in before the cooking, so there is nothing left for anyone to do. Closing
+ * it here is what keeps a counter's board from filling up with paid orders that
+ * nobody remembers to tick off. An order that still owes money is left alone —
+ * the cashier closes that one when the guest pays.
+ */
+function closeIfDone(orderId: number): void {
+  const order = dbGet<{ status: string; dueCents: number; paidAt: string | null }>(
+    'SELECT status, dueCents, paidAt FROM orders WHERE id = ?',
+    [orderId]
+  )
+  if (!order || order.status === 'completed' || order.status === 'cancelled') return
+  if (!order.paidAt || order.dueCents > 0) return
+  const left =
+    dbGet<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM order_items WHERE orderId = ? AND status IN ('active','pending','preparing','ready')",
+      [orderId]
+    )?.n ?? 0
+  if (left > 0) return
+  completeOrder(orderId)
+}
+
 export function setItemKitchenStatus(input: { itemId: number; status: string }): KitchenBoard {
   if (!['pending', 'preparing', 'ready', 'served'].includes(input.status)) {
     throw new AppError('VALIDATION', 'Invalid kitchen status')
   }
-  const item = dbGet<{ id: number; status: string }>('SELECT id, status FROM order_items WHERE id = ?', [input.itemId])
+  const item = dbGet<{ id: number; status: string; orderId: number }>(
+    'SELECT id, status, orderId FROM order_items WHERE id = ?',
+    [input.itemId]
+  )
   if (!item) throw new AppError('NOT_FOUND')
-  dbWrite('UPDATE order_items SET status = ? WHERE id = ?', [input.status, input.itemId])
-  dbWrite('UPDATE kitchen_tickets SET status = ?, updatedAt = ? WHERE orderItemId = ?', [
-    input.status,
-    nowStamp(),
-    input.itemId
-  ])
+  transaction(() => {
+    dbWrite('UPDATE order_items SET status = ? WHERE id = ?', [input.status, input.itemId])
+    dbWrite('UPDATE kitchen_tickets SET status = ?, updatedAt = ? WHERE orderItemId = ?', [
+      input.status,
+      nowStamp(),
+      input.itemId
+    ])
+    if (input.status === 'served') closeIfDone(item.orderId)
+  })
   return kitchenBoard()
 }
 

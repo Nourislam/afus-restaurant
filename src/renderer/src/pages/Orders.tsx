@@ -74,6 +74,11 @@ export default function OrdersPage() {
       render: (row) => (
         <div className="flex flex-wrap gap-1">
           <Badge tone={orderStatusTone(row.status)}>{orderStatusLabel(language, row.status)}</Badge>
+          {/* Paid but not yet handed over, which a list of orders has to show or
+              the counter cannot tell what is waiting on whom. */}
+          {row.paidAt && row.status !== 'completed' && row.status !== 'cancelled' ? (
+            <Badge tone="positive">{t('pos.prepaid')}</Badge>
+          ) : null}
           {row.isHeld ? <Badge tone="amber">{t('orders.held')}</Badge> : null}
         </div>
       )

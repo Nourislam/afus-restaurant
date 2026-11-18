@@ -45,6 +45,7 @@ export const CHANNELS = [
   'orders.hold',
   'orders.resume',
   'orders.pay',
+  'orders.complete',
   'orders.cancel',
   'orders.moveTable',
   'orders.merge',

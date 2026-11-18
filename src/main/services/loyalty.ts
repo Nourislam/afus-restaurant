@@ -123,13 +123,15 @@ export function redeem(orderId: number, points: number): RedeemResult {
   const rules = loyaltyRules()
   if (!rules.enabled) throw new AppError('VALIDATION', 'Loyalty is off')
   if (rules.pointValueCents <= 0) throw new AppError('VALIDATION', 'A point is worth nothing yet')
-  const order = dbGet<{ customerId: number | null; status: string; subtotalCents: number; discountCents: number; loyaltyPointsRedeemed: number }>(
-    'SELECT customerId, status, subtotalCents, discountCents, loyaltyPointsRedeemed FROM orders WHERE id = ?',
+  const order = dbGet<{ customerId: number | null; status: string; paidAt: string | null; subtotalCents: number; discountCents: number; loyaltyPointsRedeemed: number }>(
+    'SELECT customerId, status, paidAt, subtotalCents, discountCents, loyaltyPointsRedeemed FROM orders WHERE id = ?',
     [orderId]
   )
   if (!order) throw new AppError('NOT_FOUND')
   if (!order.customerId) throw new AppError('VALIDATION', 'Attach the customer first')
-  if (['completed', 'cancelled'].includes(order.status)) throw new AppError('INVALID_STATUS')
+  /* Points come off the bill, so they can only be used while there is a bill —
+     not after the money is in, even if the food has not gone out yet. */
+  if (['completed', 'cancelled'].includes(order.status) || order.paidAt) throw new AppError('INVALID_STATUS')
   const wanted = Math.floor(points)
   if (wanted <= 0) throw new AppError('VALIDATION', 'Choose how many points')
   if (wanted < rules.minRedeem) throw new AppError('VALIDATION', `Minimum ${rules.minRedeem} points`)

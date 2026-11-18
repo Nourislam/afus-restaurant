@@ -423,6 +423,10 @@ export const MESSAGES: Record<string, Message> = {
   'delivery.courier': { ar: 'الموزّع', fr: 'Livreur' },
   'delivery.fee': { ar: 'رسوم التوصيل', fr: 'Frais de livraison' },
   'errors.OVERPAYMENT': { ar: 'المبلغ أكبر من المطلوب', fr: 'Montant supérieur au dû' },
+  'errors.ORDER_SETTLED': { ar: 'الطلب مدفوع، لا يمكن تغييره — افتح طلبًا جديدًا', fr: 'Commande déjà payée : elle ne peut plus changer — ouvrez une nouvelle commande' },
+  'errors.PAYMENT_REQUIRED_FIRST': { ar: 'هذا النوع من الطلبات يُدفع قبل التحضير', fr: 'Ce type de commande se paie avant la préparation' },
+  'errors.PAYMENT_REQUIRED': { ar: 'لا يمكن تسليم الطلب قبل دفع ما تبقّى', fr: 'Impossible de livrer la commande : il reste un solde' },
+  'errors.NOTHING_TO_SEND': { ar: 'كل الأطباق عند المطبخ بالفعل', fr: 'Tous les plats sont déjà en cuisine' },
   'inventory.reason': { ar: 'السبب', fr: 'Motif' },
   'recipes.note': { ar: 'ملاحظة', fr: 'Note' },
   'menu.unavailable': { ar: 'غير متوفر', fr: 'Indisponible' },
@@ -474,6 +478,13 @@ export const MESSAGES: Record<string, Message> = {
   'pos.printReceipt': { ar: 'طباعة التذكرة', fr: 'Imprimer ticket' },
   'pos.pay': { ar: 'الدفع', fr: 'Encaisser' },
   'pos.paid': { ar: 'مدفوع', fr: 'Payé' },
+  'pos.prepaid': { ar: 'مدفوع مسبقًا', fr: 'Prépayé' },
+  'pos.unpaid': { ar: 'غير مدفوع', fr: 'Non payé' },
+  'pos.handOver': { ar: 'تسليم وإغلاق', fr: 'Remettre et clôturer' },
+  'pos.handedOver': { ar: 'تم التسليم', fr: 'Remis' },
+  'pos.paidAndSent': { ar: 'تم الدفع وأُرسل للمطبخ', fr: 'Payé et envoyé en cuisine' },
+  'pos.payFirstHint': { ar: 'يُدفع قبل الإرسال للمطبخ', fr: 'À payer avant l’envoi en cuisine' },
+  'pos.payLastHint': { ar: 'يُدفع بعد التقديم', fr: 'À payer après le service' },
   'pos.remaining': { ar: 'المتبقي', fr: 'Restant' },
   'pos.split': { ar: 'تقسيم', fr: 'Partager' },
   'pos.discount': { ar: 'تخفيض', fr: 'Remise' },
@@ -730,6 +741,19 @@ export const MESSAGES: Record<string, Message> = {
   'backup.kind.manual': { ar: 'يدوية', fr: 'Manuelle' },
   'backup.kind.auto': { ar: 'تلقائية', fr: 'Automatique' },
   'backup.kind.pre-restore': { ar: 'قبل الاستعادة', fr: 'Avant restauration' },
+
+  'settings.flowTitle': { ar: 'مسار الطلب', fr: 'Déroulement de la commande' },
+  'settings.flowHint': {
+    ar: 'من يأتي أولًا: المال أم المطبخ. اختر لكل نوع من الطلبات. الطاولات عادة تُدفع في الآخر، وشبّاك الوجبات السريعة يُدفع أولًا.',
+    fr: 'Qui vient d’abord : l’argent ou la cuisine. À choisir par type de commande. À table on règle à la fin, au comptoir on paie d’abord.'
+  },
+  'settings.autoSendOnPrepay': { ar: 'إرسال تلقائي للمطبخ عند الدفع المسبق', fr: 'Envoi automatique en cuisine dès le paiement' },
+  'settings.autoSendOnPrepayHint': {
+    ar: 'في الطلبات التي تُدفع أولًا، يستلم المطبخ الطلب لحظة دخول المال دون الحاجة لزر آخر.',
+    fr: 'Pour les commandes payées d’avance, la cuisine reçoit la commande dès que l’argent est encaissé.'
+  },
+  'kitchen.prepaid': { ar: 'مدفوع', fr: 'Payé' },
+  'kitchen.unpaid': { ar: 'غير مدفوع', fr: 'Non payé' },
 
   'errors.screenTitle': { ar: 'تعذّر عرض هذه الشاشة', fr: 'Cet écran n’a pas pu s’afficher' },
   'errors.screenHint': { ar: 'بقية البرنامج تعمل. أعد المحاولة أو اختر شاشة أخرى من القائمة.', fr: 'Le reste du programme fonctionne. Réessayez ou choisissez un autre écran dans le menu.' },

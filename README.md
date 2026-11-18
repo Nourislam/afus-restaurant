@@ -21,7 +21,12 @@ conventions — so the three programs feel like one family.
 - **Fast point of sale** – most-ordered dishes first, portions and modifiers in a click, split the
   bill between guests, cash / card / transfer.
 - **Kitchen display** – every order reaches the kitchen sorted by station (grill, pizza, dessert)
-  with a timer and a colour for late tickets; the cook marks what is ready.
+  with a timer and a colour for late tickets, and a mark saying whether it is already paid for; the
+  cook marks what is ready.
+- **Both orders of business** – a guest at a table settles at the end, and a guest at the counter
+  pays before the grill is lit. Each kind of order (dine-in, takeaway, delivery, pre-order) has its
+  own setting, a prepaid order fires itself to the kitchen the moment the money is in, and it closes
+  when the last dish is served.
 - **Delivery & reservations** – delivery orders with address, phone and driver; table reservations
   by name, time and party size.
 - **Menu & recipes** – dishes by category with photos and prices; a recipe with its ingredients so

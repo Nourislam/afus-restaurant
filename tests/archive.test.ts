@@ -99,7 +99,13 @@ describe('opening a year again', () => {
     /* A sale moved to last year must not come back in this year's archive. */
     const stray = createOrder({ type: 'takeaway', items: [{ productId: product().id, qty: 1 }] })
     payOrder({ orderId: stray.id, payments: [{ method: 'cash', amountCents: stray.totalCents }] })
-    dbWrite("UPDATE orders SET completedAt = ? WHERE id = ?", [`${thisYear - 1}-06-01 12:00:00`, stray.id])
+    /* A sale is dated by the moment its money came in, so that is the stamp a
+       sale moved into last year has to carry. */
+    dbWrite("UPDATE orders SET paidAt = ?, completedAt = ? WHERE id = ?", [
+      `${thisYear - 1}-06-01 12:00:00`,
+      `${thisYear - 1}-06-01 12:00:00`,
+      stray.id
+    ])
 
     const archive = archiveYear(thisYear, PASS)
     const { payload, report } = openArchive(archive.name, PASS)

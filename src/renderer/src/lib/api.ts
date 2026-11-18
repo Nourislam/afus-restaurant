@@ -208,8 +208,9 @@ export const api = {
     sendToKitchen: (orderId: number) => call<Order>('orders.sendToKitchen', { orderId }),
     hold: (orderId: number) => call<Order>('orders.hold', { orderId }),
     resume: (orderId: number) => call<Order>('orders.resume', { orderId }),
-    pay: (orderId: number, payments: { method: string; amountCents: number; reference?: string | null }[]) =>
-      call<Order>('orders.pay', { orderId, payments }),
+    pay: (orderId: number, payments: { method: string; amountCents: number; reference?: string | null }[], closeNow?: boolean) =>
+      call<Order>('orders.pay', { orderId, payments, closeNow }),
+    complete: (orderId: number) => call<Order>('orders.complete', { orderId }),
     cancel: (orderId: number, reason: string, stockPolicy?: string) =>
       call<Order>('orders.cancel', { orderId, reason, stockPolicy: stockPolicy ?? null }),
     moveTable: (orderId: number, tableId: number | null) => call<Order>('orders.moveTable', { orderId, tableId }),

@@ -12,11 +12,12 @@ import {
   Printer,
   Search,
   Send,
+  Check,
   ShoppingCart,
   Trash2,
   X
 } from 'lucide-react'
-import { ORDER_TYPES, type OrderType } from '@shared/constants'
+import { ORDER_TYPES, type OrderFlow, type OrderType } from '@shared/constants'
 import type { Modifier, Order, Product, ProductVariant } from '@shared/types'
 import { api } from '../lib/api'
 import { useApi, useAppEvent } from '../lib/hooks'
@@ -337,6 +338,22 @@ export default function PosPage() {
     }
   }
 
+  /** The food goes out and the order closes. Only ever a prepaid order. */
+  const handOver = async () => {
+    if (!order) return
+    setBusy('handOver')
+    try {
+      await api.orders.complete(order.id)
+      flash(t('pos.handedOver'))
+      resetAll()
+      void tableMap.reload()
+    } catch (caught) {
+      flash(errorText(language, caught instanceof Error ? caught.message : 'UNEXPECTED_ERROR'), 'error')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const holdCurrent = async () => {
     const target = await ensureOrder()
     if (!target) return
@@ -377,6 +394,18 @@ export default function PosPage() {
   const hasItems = order ? order.items.length > 0 : draft.length > 0
   const closed = order ? order.status === 'completed' || order.status === 'cancelled' : false
   const canPay = can('orders.close')
+  /* Which comes first here, the money or the kitchen. The till follows the
+     house's own habit for this kind of order instead of imposing one. */
+  const flow: OrderFlow = (settings?.orderFlow?.[order?.type ?? type] as OrderFlow) ?? 'payLast'
+  const payFirst = flow === 'payFirst'
+  /* Paid, but the food has not gone out yet — the counter still owes the guest
+     a plate, and the order stays on the screen until it is handed over. */
+  const settled = Boolean(order?.paidAt) && !closed
+  /* Nothing may change once the money is in: the guest paid for exactly this. */
+  const locked = closed || settled
+  const sendBlocked = payFirst && !!order && order.dueCents > 0
+  /* Everything is already with the kitchen, so there is nothing left to fire. */
+  const nothingToSend = Boolean(order) && !order?.items.some((item) => item.status === 'active')
   const typeLocked = Boolean(order)
   const currency = settings?.currency ?? 'DZD'
 
@@ -458,7 +487,7 @@ export default function PosPage() {
                 {activeProducts.map((product) => (
                   <button
                     key={product.id}
-                    disabled={!product.isAvailable || closed}
+                    disabled={!product.isAvailable || locked}
                     onClick={() => {
                       if (product.variants.length > 1 || product.modifierGroups.length > 0) setItemTarget(product)
                       else void addToOrder(product, product.variants[0] ?? null, [], 1, '')
@@ -506,6 +535,7 @@ export default function PosPage() {
             {order ? (
               <div className="flex items-center gap-1.5">
                 <Badge tone={orderStatusTone(order.status)}>{orderStatusLabel(language, order.status)}</Badge>
+                {settled ? <Badge tone="positive">{t('pos.prepaid')}</Badge> : null}
                 {order.isHeld ? <Badge tone="amber">{t('orders.held')}</Badge> : null}
               </div>
             ) : null}
@@ -691,7 +721,7 @@ export default function PosPage() {
                       <div className="flex items-center gap-1">
                         <button
                           className="h-6 w-6 rounded border border-slate-200 text-xs font-bold text-slate-500 disabled:opacity-40 dark:border-slate-700"
-                          disabled={Boolean(busy) || closed || order.isHeld}
+                          disabled={Boolean(busy) || locked || order.isHeld}
                           onClick={() => void updateOrderItemQty(item.id, item.qty - 1)}
                         >
                           −
@@ -699,7 +729,7 @@ export default function PosPage() {
                         <span className="num w-7 text-center text-xs font-semibold">{item.qty}</span>
                         <button
                           className="h-6 w-6 rounded border border-slate-200 text-xs font-bold text-slate-500 disabled:opacity-40 dark:border-slate-700"
-                          disabled={Boolean(busy) || closed || order.isHeld}
+                          disabled={Boolean(busy) || locked || order.isHeld}
                           onClick={() => void updateOrderItemQty(item.id, item.qty + 1)}
                         >
                           +
@@ -708,7 +738,7 @@ export default function PosPage() {
                       <div className="flex items-center gap-1">
                         <button
                           className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
-                          disabled={closed || order.isHeld}
+                          disabled={locked || order.isHeld}
                           onClick={() => setNoteTarget({ itemId: item.id, note: item.note ?? '' })}
                           title={t('pos.noteItem')}
                         >
@@ -716,7 +746,7 @@ export default function PosPage() {
                         </button>
                         <button
                           className="rounded p-1 text-red-500 hover:bg-red-50"
-                          disabled={Boolean(busy) || closed || order.isHeld}
+                          disabled={Boolean(busy) || locked || order.isHeld}
                           onClick={() => void removeOrderItem(item.id)}
                           title={t('common.delete')}
                         >
@@ -786,7 +816,7 @@ export default function PosPage() {
                   value={note}
                   onChange={(event) => setNote(event.target.value)}
                   onBlur={async () => {
-                    if (order && !closed && !order.isHeld && note !== (order.note ?? '')) {
+                    if (order && !locked && !order.isHeld && note !== (order.note ?? '')) {
                       try {
                         setOrder(await api.orders.setNote(order.id, note))
                       } catch {
@@ -854,35 +884,74 @@ export default function PosPage() {
               </>
             ) : null}
 
+            {/* Which comes first here, and where the order has got to. One line,
+                so the cashier never has to guess which button is the next one. */}
+            {hasItems && !closed ? (
+              <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-1.5 text-[11px] font-medium dark:bg-slate-800/60">
+                {settled ? (
+                  <>
+                    <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                    <span className="text-emerald-700 dark:text-emerald-400">
+                      {order?.sentAt ? t('pos.paidAndSent') : t('pos.prepaid')}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    {payFirst ? <CreditCard className="h-3.5 w-3.5 shrink-0 text-amber-600" /> : <Send className="h-3.5 w-3.5 shrink-0 text-slate-400" />}
+                    <span className="text-slate-500 dark:text-slate-400">
+                      {payFirst ? t('pos.payFirstHint') : t('pos.payLastHint')}
+                    </span>
+                  </>
+                )}
+              </div>
+            ) : null}
+
             <div className="grid grid-cols-2 gap-2 pt-1">
-              <Button
-                variant="secondary"
-                icon={Send}
-                size="sm"
-                loading={busy === 'send' || busy === 'create'}
-                disabled={!hasItems || closed}
-                onClick={() => void sendKitchen()}
-              >
-                {t('pos.sendKitchen')}
-              </Button>
-              {canPay ? (
+              {/* Handing the food over is the last step of a prepaid order, and
+                  it takes the place of the two buttons that are now spent. */}
+              {settled ? (
                 <Button
-                  icon={CreditCard}
+                  className="col-span-2"
+                  icon={Check}
                   size="sm"
-                  disabled={!hasItems || closed || Boolean(busy)}
-                  onClick={async () => {
-                    const target = await ensureOrder()
-                    if (target) setPayOpen(true)
-                  }}
+                  loading={busy === 'handOver'}
+                  onClick={() => void handOver()}
                 >
-                  {t('pos.pay')}
+                  {t('pos.handOver')}
                 </Button>
-              ) : null}
+              ) : (
+                <>
+                  <Button
+                    variant={payFirst ? 'ghost' : 'secondary'}
+                    icon={Send}
+                    size="sm"
+                    loading={busy === 'send' || busy === 'create'}
+                    disabled={!hasItems || closed || sendBlocked || nothingToSend}
+                    title={sendBlocked ? t('errors.PAYMENT_REQUIRED_FIRST') : undefined}
+                    onClick={() => void sendKitchen()}
+                  >
+                    {t('pos.sendKitchen')}
+                  </Button>
+                  {canPay ? (
+                    <Button
+                      icon={CreditCard}
+                      size="sm"
+                      disabled={!hasItems || closed || Boolean(busy)}
+                      onClick={async () => {
+                        const target = await ensureOrder()
+                        if (target) setPayOpen(true)
+                      }}
+                    >
+                      {t('pos.pay')}
+                    </Button>
+                  ) : null}
+                </>
+              )}
               <Button
                 variant="ghost"
                 size="sm"
                 icon={Pause}
-                disabled={!hasItems || closed || Boolean(order?.stockDeducted)}
+                disabled={!hasItems || locked || Boolean(order?.stockDeducted)}
                 loading={busy === 'hold'}
                 onClick={() => void holdCurrent()}
               >
@@ -892,15 +961,15 @@ export default function PosPage() {
                 variant="ghost"
                 size="sm"
                 icon={Percent}
-                disabled={!order || closed || !can('orders.discount')}
+                disabled={!order || locked || !can('orders.discount')}
                 onClick={() => setDiscountOpen(true)}
               >
                 {t('pos.discount')}
               </Button>
-              <Button variant="ghost" size="sm" icon={Percent} disabled={!order || closed} onClick={() => setOffersOpen(true)}>
+              <Button variant="ghost" size="sm" icon={Percent} disabled={!order || locked} onClick={() => setOffersOpen(true)}>
                 {t('offers.tab')}
               </Button>
-              <Button variant="ghost" size="sm" icon={Gift} disabled={!order || closed} onClick={() => setLoyaltyOpen(true)}>
+              <Button variant="ghost" size="sm" icon={Gift} disabled={!order || locked} onClick={() => setLoyaltyOpen(true)}>
                 {t('loyalty.redeem')}
               </Button>
             </div>
@@ -925,9 +994,11 @@ export default function PosPage() {
                     >
                       <Merge className="h-3 w-3" /> {t('pos.merge')}
                     </button>
-                    <button className="flex items-center gap-1 rounded px-1.5 py-1 text-red-500 hover:bg-red-50" onClick={() => setCancelOpen(true)}>
-                      <X className="h-3 w-3" /> {t('pos.cancelOrder')}
-                    </button>
+                    {!settled ? (
+                      <button className="flex items-center gap-1 rounded px-1.5 py-1 text-red-500 hover:bg-red-50" onClick={() => setCancelOpen(true)}>
+                        <X className="h-3 w-3" /> {t('pos.cancelOrder')}
+                      </button>
+                    ) : null}
                   </>
                 ) : null}
               </div>
@@ -965,23 +1036,38 @@ export default function PosPage() {
           onPaid={async (updated, printReceiptFlag) => {
             setOrder(updated)
             setPayOpen(false)
-            if (updated.dueCents <= 0) {
-              /* Thank the customer on their own screen before the till resets. */
-              void api.display.push({ order: updated, done: true }).catch(() => undefined)
-              /* The money is in. A receipt that will not print is a printing
-                 problem, never a reason to tell the cashier the sale failed. */
-              flash(t('pos.paid'))
-              if (printReceiptFlag && settings) {
-                try {
-                  await print(receiptHtml(updated, settings, language, settings.paperWidth), false)
-                } catch {
-                  flash(errorText(language, 'PRINT_FAILED'), 'error')
-                }
-              }
-              resetAll()
-            } else {
+            if (updated.dueCents > 0) {
               flash(t('common.saved'))
+              return
             }
+            /* Thank the customer on their own screen before the till resets. */
+            void api.display.push({ order: updated, done: true }).catch(() => undefined)
+            /* The money is in. A receipt that will not print is a printing
+               problem, never a reason to tell the cashier the sale failed. */
+            const sentAlready = Boolean(updated.sentAt)
+            const stillOpen = updated.status !== 'completed'
+            flash(stillOpen && sentAlready ? t('pos.paidAndSent') : t('pos.paid'))
+            if (printReceiptFlag && settings) {
+              try {
+                await print(receiptHtml(updated, settings, language, settings.paperWidth), false)
+              } catch {
+                flash(errorText(language, 'PRINT_FAILED'), 'error')
+              }
+            }
+            /* A prepaid order that went straight to the kitchen also needs its
+               kitchen ticket, or the cooks are working from the screen alone. */
+            if (stillOpen && sentAlready && settings) {
+              try {
+                await print(kitchenTicketHtml(updated, settings, language), false)
+              } catch {
+                flash(errorText(language, 'PRINT_FAILED'), 'error')
+              }
+            }
+            void tableMap.reload()
+            /* Clear the till for the next customer once there is nothing left
+               for the cashier to do. An order still waiting to be sent stays on
+               screen, because sending it is their next move. */
+            if (!stillOpen || sentAlready) resetAll()
           }}
         />
       ) : null}

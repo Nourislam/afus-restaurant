@@ -1,6 +1,7 @@
 import type { DashboardSummary } from '@shared/types'
 import { dbAll, dbGet } from '../db/client'
 import { dayString, monthStart, today } from '../utils/dates'
+import { settledSale } from './sale'
 
 interface Range {
   from?: string | null
@@ -13,9 +14,11 @@ export function dashboardSummary(range: Range = {}): DashboardSummary {
   const params = [`${from} 00:00:00`, `${to} 23:59:59`]
   /* Always qualify the columns: order_items also has status/createdAt, so an unqualified
      fragment makes joined queries fail with "ambiguous column name: createdAt". */
+  /* A sale is money taken, not a plate handed over: a prepaid order still in
+     the kitchen belongs in today's figures. */
   const completedOn = (alias: string): string =>
-    `${alias}.status = 'completed' AND ${alias}.createdAt BETWEEN ? AND ?`
-  const completed = `status = 'completed' AND createdAt BETWEEN ? AND ?`
+    `${settledSale(alias)} AND ${alias}.createdAt BETWEEN ? AND ?`
+  const completed = `${settledSale('')} AND createdAt BETWEEN ? AND ?`
 
   const sales = dbGet<{ total: number | null; count: number; items: number | null }>(
     `SELECT SUM(o.totalCents) AS total,
@@ -46,7 +49,7 @@ export function dashboardSummary(range: Range = {}): DashboardSummary {
             SUM(oi.lineTotalCents) AS revenueCents
        FROM order_items oi
        JOIN orders o ON o.id = oi.orderId
-      WHERE ${completedOn('o')} AND oi.status = 'active'
+      WHERE ${completedOn('o')} AND oi.status != 'removed'
       GROUP BY oi.productId
       ORDER BY qty DESC
       LIMIT 8`,

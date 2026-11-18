@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, ChefHat, CreditCard, FileText, Printer, Receipt, X } from 'lucide-react'
+import { ArrowLeft, Check, ChefHat, CreditCard, FileText, Printer, Receipt, X } from 'lucide-react'
 import type { Invoice, Order } from '@shared/types'
 import { ORDER_STATUSES } from '@shared/constants'
 import { api } from '../lib/api'
@@ -64,6 +64,8 @@ export default function OrderDetailPage() {
 
   const data = order.data
   const closed = data.status === 'completed' || data.status === 'cancelled'
+  /* Paid for, not yet handed over: the money came in before the food went out. */
+  const settled = Boolean(data.paidAt) && !closed
   const currency = settings?.currency ?? 'DZD'
 
   const [invoiceOpen, setInvoiceOpen] = useState(false)
@@ -83,6 +85,20 @@ export default function OrderDetailPage() {
       await api.print.html(kitchenTicketHtml(data, settings, language), settings.printerName || undefined, false)
     } catch (caught) {
       setNotice(errorText(language, caught instanceof Error ? caught.message : 'UNEXPECTED_ERROR'))
+    }
+  }
+
+  const handOver = async () => {
+    setBusy('handOver')
+    setError(null)
+    try {
+      await api.orders.complete(data.id)
+      setNotice(t('pos.handedOver'))
+      await order.reload()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'UNEXPECTED_ERROR')
+    } finally {
+      setBusy(null)
     }
   }
 
@@ -112,6 +128,7 @@ export default function OrderDetailPage() {
         actions={
           <>
             <Badge tone={orderStatusTone(data.status)}>{orderStatusLabel(language, data.status)}</Badge>
+            {settled ? <Badge tone="positive">{t('pos.prepaid')}</Badge> : null}
             {data.isHeld ? <Badge tone="amber">{t('orders.held')}</Badge> : null}
             <Button variant="secondary" icon={Printer} onClick={() => void printReceipt()}>
               {t('pos.printReceipt')}
@@ -119,7 +136,7 @@ export default function OrderDetailPage() {
             <Button variant="secondary" icon={ChefHat} onClick={() => void printKitchen()}>
               {t('pos.printKitchen')}
             </Button>
-            {data.status === 'completed' ? (
+            {data.paidAt && data.status !== 'cancelled' ? (
               <Button variant="secondary" icon={FileText} onClick={() => setInvoiceOpen(true)}>
                 {t('invoices.issue')}
               </Button>
@@ -134,6 +151,12 @@ export default function OrderDetailPage() {
             {data.dueCents > 0 && can('orders.close') && !closed ? (
               <Button icon={CreditCard} onClick={() => setPayOpen(true)}>
                 {t('pos.pay')}
+              </Button>
+            ) : null}
+            {/* Paid already, still to go out: the last step is handing it over. */}
+            {settled && can('pos.use') ? (
+              <Button icon={Check} loading={busy === 'handOver'} onClick={() => void handOver()}>
+                {t('pos.handOver')}
               </Button>
             ) : null}
           </>
@@ -289,9 +312,11 @@ export default function OrderDetailPage() {
                     key={status}
                     size="sm"
                     variant={status === 'completed' ? 'primary' : 'secondary'}
-                    loading={busy === status}
-                    disabled={Boolean(busy) || (status === 'completed' && data.paidCents < data.totalCents)}
-                    onClick={() => void changeStatus(status)}
+                    loading={busy === status || (status === 'completed' && busy === 'handOver')}
+                    disabled={Boolean(busy) || (status === 'completed' && data.dueCents > 0)}
+                    /* Finishing goes through the hand-over, which seals the sale
+                       and frees the table; the rest are plain status moves. */
+                    onClick={() => void (status === 'completed' ? handOver() : changeStatus(status))}
                   >
                     {orderStatusLabel(language, status)}
                   </Button>
