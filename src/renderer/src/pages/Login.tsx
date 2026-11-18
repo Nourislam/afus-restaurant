@@ -6,6 +6,7 @@ import { api } from '../lib/api'
 import { localized, useT } from '../i18n'
 import { AfusMark } from '../components/AfusLogo'
 import { TitleBar } from '../components/TitleBar'
+import { DemoBar } from '../components/DemoBar'
 import { PinPad } from '../components/NumPad'
 import { Spinner } from '../components/ui'
 
@@ -54,6 +55,7 @@ export default function LoginPage({ onLogin }: { onLogin: () => Promise<void> })
 
   return (
     <div className="flex h-full flex-col bg-ink-100 dark:bg-ink-950" dir={language === 'ar' ? 'rtl' : 'ltr'}>
+      <DemoBar />
       <TitleBar bare>
         <button
           onClick={() => setLanguage(language === 'ar' ? 'fr' : 'ar')}

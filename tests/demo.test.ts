@@ -3,6 +3,8 @@
  * restaurant and not a stage set: the figures must add up, the fiscal chain
  * must verify, and the service in progress must be in progress.
  */
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { closeDatabase, dbAll, dbGet, openDatabase } from '../src/main/db/client'
 import { seedCoreData } from '../src/main/db/seed'
@@ -22,6 +24,14 @@ beforeEach(async () => {
   await openDatabase(null)
   seedCoreData()
 })
+
+function sourceFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name)
+    if (entry.isDirectory()) return sourceFiles(path)
+    return /\.tsx?$/.test(entry.name) ? [path] : []
+  })
+}
 
 const count = (sql: string, params: unknown[] = []): number =>
   dbGet<{ n: number }>(`SELECT COUNT(*) AS n FROM ${sql}`, params as never[])?.n ?? 0
@@ -140,5 +150,27 @@ describe('the demo restaurant', () => {
       "SELECT COALESCE(SUM(totalCents), 0) AS total, COUNT(*) AS n FROM orders WHERE status = 'completed'"
     )
     expect(second).toEqual(first)
+  })
+})
+
+describe('the demo cannot be reached from the installed program', () => {
+  it('has no channel that seeds a restaurant with invented sales', () => {
+    /* The web demo calls `seedDemoRestaurant` directly, in its own page. If it
+       ever became an IPC channel, a real restaurant could be filled with
+       invented trading from the screen. */
+    const channels = readFileSync('src/shared/channels.ts', 'utf8')
+    expect(channels).not.toMatch(/demo/i)
+    const registrations = sourceFiles('src/main/ipc')
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n')
+    expect(registrations).not.toMatch(/seedDemoRestaurant|services\/demo/)
+  })
+
+  it('only the web demo ever announces itself as the web demo', () => {
+    /* The screens show their demo bar when `window.__AFUS_WEB_DEMO__` is set.
+       Nothing the installer ships may set it. */
+    const setters = [...sourceFiles('src/main'), ...sourceFiles('src/preload'), ...sourceFiles('src/renderer')]
+      .filter((file) => /__AFUS_WEB_DEMO__\s*=/.test(readFileSync(file, 'utf8')))
+    expect(setters).toEqual([])
   })
 })

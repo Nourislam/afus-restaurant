@@ -755,6 +755,13 @@ export const MESSAGES: Record<string, Message> = {
   'kitchen.prepaid': { ar: 'مدفوع', fr: 'Payé' },
   'kitchen.unpaid': { ar: 'غير مدفوع', fr: 'Non payé' },
 
+  /* The web demo's own bar, worded as in the other Afus programs. */
+  'demo.banner': { ar: 'تجربة Afus Restaurant — جرّب كل شيء، لا شيء يُحفظ', fr: "Démo Afus Restaurant — essayez tout, rien n'est enregistré" },
+  'demo.reset': { ar: 'إعادة العرض للبداية', fr: 'Recommencer la démo' },
+  'demo.tour': { ar: 'جولة مشروحة', fr: 'Visite guidée' },
+  'demo.backSite': { ar: 'موقع Afus', fr: 'Site Afus' },
+  'demo.order': { ar: 'اطلب Afus Restaurant', fr: 'Obtenir Afus Restaurant' },
+
   'errors.screenTitle': { ar: 'تعذّر عرض هذه الشاشة', fr: 'Cet écran n’a pas pu s’afficher' },
   'errors.screenHint': { ar: 'بقية البرنامج تعمل. أعد المحاولة أو اختر شاشة أخرى من القائمة.', fr: 'Le reste du programme fonctionne. Réessayez ou choisissez un autre écran dans le menu.' },
   /* Codes the till itself raises before it ever reaches the main process.

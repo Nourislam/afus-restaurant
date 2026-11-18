@@ -7,6 +7,7 @@ import { useAppStore } from '../store/app'
 import { useT } from '../i18n'
 import { AfusMark } from './AfusLogo'
 import { TitleBar } from './TitleBar'
+import { DemoBar } from './DemoBar'
 import { Sidebar, type NavItem } from './Sidebar'
 import { NAV, type NavEntry } from '../lib/navigation'
 import { ErrorBoundary } from './ErrorBoundary'
@@ -101,6 +102,7 @@ export function AppShell() {
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-ink-100 dark:bg-ink-950">
+      <DemoBar />
       <TitleBar>
         {canManage ? (
           <BarButton

@@ -108,10 +108,6 @@ const CSS = `
 #afus-tour button.tt-btn,#afus-tour a.tt-btn{flex:1;min-height:44px;border-radius:12px;border:1px solid #e4e4e7;background:#fff;color:#18181b;font:inherit;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;text-decoration:none}
 #afus-tour .tt-primary{background:#6366f1 !important;border-color:#6366f1 !important;color:#fff !important}
 #afus-tour .tt-note{margin:-6px 18px 12px;font-size:12.5px;color:#b45309;background:#fffbeb;border-radius:10px;padding:8px 10px}
-#afus-dock{position:fixed;inset-inline-end:20px;bottom:20px;z-index:2147482999;display:flex;gap:8px;direction:${LANG === 'ar' ? 'rtl' : 'ltr'};font-family:'Cairo Variable','Inter Variable',system-ui,sans-serif}
-#afus-dock a,#afus-dock button{display:inline-flex;align-items:center;min-height:40px;padding:0 16px;border-radius:999px;border:0;font:inherit;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;box-shadow:0 10px 30px rgba(0,0,0,.3)}
-#afus-dock .dk-tour{background:#6366f1;color:#fff}
-#afus-dock .dk-site{background:#fff;color:#18181b}
 @media (prefers-reduced-motion:no-preference){#afus-tour{animation:afus-tour-in .25s ease-out}}
 @keyframes afus-tour-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 `
@@ -151,33 +147,12 @@ function render() {
   })
 }
 
-/**
- * When the tour is put away the visitor still needs a way back: one pill to
- * reopen it and one to return to the website. Without them a closed panel left
- * the demo with no exit at all.
- */
-function showDock() {
-  if (document.getElementById('afus-dock')) return
-  const dock = document.createElement('div')
-  dock.id = 'afus-dock'
-  dock.innerHTML = `
-    <button class="dk-tour" type="button">${T('الجولة المشروحة', 'Visite guidée')}</button>
-    <a class="dk-site" href="${window.__AFUS_WEB_DEMO__?.orderUrl || '../'}" target="_top">${T('اطلب البرنامج', 'Obtenir le logiciel')}</a>`
-  dock.querySelector('.dk-tour').onclick = () => {
-    dock.remove()
-    openTour(0)
-  }
-  document.body.appendChild(dock)
-}
-
 function close() {
   box?.remove()
   box = null
-  showDock()
 }
 
 export function openTour(at = 0) {
-  document.getElementById('afus-dock')?.remove()
   if (!document.getElementById('afus-tour-css')) {
     const style = document.createElement('style')
     style.id = 'afus-tour-css'
